@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.TaskScheduler;
@@ -153,6 +154,54 @@ namespace DS4WinWPF
             string lnkprogpath = ResolveShortcut(lnkpath);
             return lnkprogpath != DS4Windows.Global.exelocation;
         }
+
+        /// <summary>
+        /// Create or remove the startup task. When DS4Windows is not elevated,
+        /// an elevated copy of DS4Windows does the work (one UAC prompt)
+        /// </summary>
+        /// <returns>True if the task now matches the requested state</returns>
+        public static bool SetTaskEntry(bool create)
+        {
+            try
+            {
+                bool elevated = DS4Windows.Global.IsAdministrator();
+
+                // Nothing to change, no need to bother the user with a prompt
+                if (!elevated && HasTaskEntry() == create)
+                    return true;
+
+                if (elevated)
+                {
+                    if (create)
+                        WriteTaskEntry();
+                    else
+                        DeleteTaskEntry();
+                }
+                else
+                {
+                    ProcessStartInfo startInfo = new ProcessStartInfo(DS4Windows.Global.exelocation)
+                    {
+                        Verb = "runas",
+                        UseShellExecute = true,
+                        Arguments = create ? WRITE_TASK_ARG : DELETE_TASK_ARG,
+                    };
+
+                    using Process child = Process.Start(startInfo);
+                    if (child == null || !child.WaitForExit(30000))
+                        return false;
+                }
+
+                return HasTaskEntry() == create;
+            }
+            catch (Exception)
+            {
+                // UAC prompt declined or TaskScheduler failure
+                return false;
+            }
+        }
+
+        public const string WRITE_TASK_ARG = "write-task";
+        public const string DELETE_TASK_ARG = "delete-task";
 
         public static void LaunchOldTask()
         {

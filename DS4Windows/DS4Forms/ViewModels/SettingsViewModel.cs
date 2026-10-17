@@ -86,6 +86,10 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         private bool canWriteTask;
         public bool CanWriteTask { get => canWriteTask; }
 
+        // Set while the Run As choice is being restored after a failed
+        // task change so the restore does not trigger another UAC prompt
+        private bool revertingRunStartTask;
+
         public ImageSource uacSource;
         public ImageSource UACSource { get => uacSource; }
 
@@ -461,7 +465,8 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             }
 
             runAtStartup = runStartProg || runStartTask;
-            canWriteTask = DS4Windows.Global.IsAdministrator();
+            // Not elevated: changing the task asks for admin rights once
+            canWriteTask = true;
 
             if (!runAtStartup)
             {
@@ -495,7 +500,7 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             }
             else if (runAtStartup && runStartTask)
             {
-                if (canWriteTask)
+                if (DS4Windows.Global.IsAdministrator())
                 {
                     StartupMethods.DeleteOldTaskEntry();
                     StartupMethods.WriteTaskEntry();
@@ -573,13 +578,38 @@ namespace DS4WinWPF.DS4Forms.ViewModels
 
         private void SettingsViewModel_RunStartTaskChanged(object sender, EventArgs e)
         {
-            if (runStartTask)
+            if (revertingRunStartTask)
+                return;
+
+            bool wanted = runStartTask;
+            if (!StartupMethods.SetTaskEntry(wanted))
             {
-                StartupMethods.WriteTaskEntry();
+                DS4Windows.AppLogger.LogToGui(wanted ?
+                    "Could not create the startup task. Administrator rights are required." :
+                    "Could not remove the startup task. Administrator rights are required.", true);
+
+                // Let the radio button group finish its update before
+                // restoring the previous choice
+                Application.Current.Dispatcher.InvokeAsync(() => RevertRunStartTask(wanted));
             }
-            else
+        }
+
+        private void RevertRunStartTask(bool failedValue)
+        {
+            revertingRunStartTask = true;
+            try
             {
-                StartupMethods.DeleteTaskEntry();
+                runStartTask = !failedValue;
+                RunStartTaskChanged?.Invoke(this, EventArgs.Empty);
+                if (failedValue && runAtStartup)
+                {
+                    // Task creation failed: fall back to the startup shortcut
+                    RunStartProg = true;
+                }
+            }
+            finally
+            {
+                revertingRunStartTask = false;
             }
         }
 
@@ -605,7 +635,10 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             else
             {
                 StartupMethods.DeleteStartProgEntry();
-                StartupMethods.DeleteTaskEntry();
+                if (!StartupMethods.SetTaskEntry(false))
+                {
+                    DS4Windows.AppLogger.LogToGui("Could not remove the startup task. Administrator rights are required.", true);
+                }
             }
         }
 

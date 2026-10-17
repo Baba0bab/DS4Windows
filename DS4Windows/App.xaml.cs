@@ -415,6 +415,28 @@ namespace DS4WinWPF
                 exitApp = true;
                 Current.Shutdown();
             }
+            else if (parser.WriteTask || parser.DeleteTask)
+            {
+                // Elevated child launched by StartupMethods.SetTaskEntry
+                int exitCode = 1;
+                if (DS4Windows.Global.IsAdministrator())
+                {
+                    try
+                    {
+                        if (parser.WriteTask)
+                            StartupMethods.WriteTaskEntry();
+                        else
+                            StartupMethods.DeleteTaskEntry();
+
+                        exitCode = 0;
+                    }
+                    catch (Exception) { }
+                }
+
+                runShutdown = false;
+                exitApp = true;
+                Current.Shutdown(exitCode);
+            }
             else if (parser.Runtask)
             {
                 StartupMethods.LaunchOldTask();

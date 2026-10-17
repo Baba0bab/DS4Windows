@@ -30,6 +30,8 @@ namespace DS4WinWPF
         private string deviceInstanceId;
         private bool deviceHelper;
         private string deviceHelperPipe;
+        private bool writeTask;
+        private bool deleteTask;
         private bool runtask;
         private bool command;
         private string commandArgs;
@@ -44,6 +46,8 @@ namespace DS4WinWPF
         public bool ReenableDevice { get => reenableDevice; }
         public bool DeviceHelper { get => deviceHelper; }
         public string DeviceHelperPipe { get => deviceHelperPipe; }
+        public bool WriteTask { get => writeTask; }
+        public bool DeleteTask { get => deleteTask; }
         public bool Runtask { get => runtask; }
         public bool Command { get => command; }
         public string DeviceInstanceId { get => deviceInstanceId; }
@@ -84,6 +88,14 @@ namespace DS4WinWPF
                             deviceHelperPipe = args[++i];
                         }
 
+                        break;
+
+                    case StartupMethods.WRITE_TASK_ARG:
+                        writeTask = true;
+                        break;
+
+                    case StartupMethods.DELETE_TASK_ARG:
+                        deleteTask = true;
                         break;
 
                     case "runtask":
