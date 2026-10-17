@@ -1,7 +1,7 @@
 # Compiler, installer et maintenir ma version de DS4Windows
 
 Ce dépôt est mon fork de [schmaldeo/DS4Windows](https://github.com/schmaldeo/DS4Windows)
-(version 3.9.9, la dernière : schmaldeo a arrêté le projet en mars 2026).
+(ma version : 4.0.0, basée sur la 3.9.9, la dernière de schmaldeo, qui a arrêté le projet en mars 2026).
 
 Toutes les commandes se lancent depuis la racine du dépôt : `C:\serveurs\DS4Windows`.
 
@@ -66,7 +66,7 @@ dotnet publish DS4Windows/DS4WinWPF.csproj -c Release -r win-x64 --self-containe
 6. Faire un raccourci vers `C:\Programmes\DS4Windows\DS4Windows.exe` (bureau / menu Démarrer).
 
 > La vérification de mises à jour interroge le dépôt de schmaldeo : comme il est arrêté
-> en 3.9.9, l'appli dira toujours « à jour » et n'écrasera jamais ma version.
+> en 3.9.9 (inférieure à ma 4.0.0), l'appli dira toujours « à jour » et n'écrasera jamais ma version.
 
 ---
 

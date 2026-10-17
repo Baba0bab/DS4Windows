@@ -3364,6 +3364,20 @@ namespace DS4Windows
             return dict;
         }
 
+        // Changelog of this fork, shipped next to the executable (Changelog.md)
+        public static string GetLocalChangelogMarkdown()
+        {
+            try
+            {
+                string path = Path.Combine(AppContext.BaseDirectory, "Changelog.md");
+                return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+            }
+            catch (Exception)
+            {
+                return string.Empty;
+            }
+        }
+
         public static async Task<string> GetChangelogMarkdown(bool allVersions = false)
         {
             var versions = await GetChangelog(allVersions);

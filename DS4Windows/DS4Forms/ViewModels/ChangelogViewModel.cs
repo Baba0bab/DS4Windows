@@ -47,8 +47,20 @@ namespace DS4WinWPF.DS4Forms.ViewModels
 
         public async Task DisplayChangelog()
         {
-            var changelog = await Changelog.GetChangelogMarkdown(true);
-            Markdown = changelog;
+            // Show the fork changelog right away, then append the upstream releases when reachable
+            string local = Changelog.GetLocalChangelogMarkdown();
+            Markdown = local;
+
+            try
+            {
+                var upstream = await Changelog.GetChangelogMarkdown(true);
+                Markdown = string.IsNullOrEmpty(local)
+                    ? upstream
+                    : local + Environment.NewLine + Environment.NewLine + upstream;
+            }
+            catch (Exception)
+            {
+            }
         }
     }
 }
