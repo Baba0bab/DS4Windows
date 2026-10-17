@@ -8,7 +8,7 @@ set INSTALL_PATH=%LOCALAPPDATA%\DS4Windows
 set /p VERSION_CHOICE="Do you want to install the latest version? (y/n): "
 if /i "%VERSION_CHOICE%"=="y" (
     :: Get the latest version using GitHub API
-    for /f "delims=" %%A in ('powershell -Command "(Invoke-WebRequest -Uri 'https://api.github.com/repos/schmaldeo/DS4Windows/releases/latest' -Headers @{ 'User-Agent' = 'Mozilla/5.0' }).Content | ConvertFrom-Json | Select-Object -ExpandProperty tag_name"') do (
+    for /f "delims=" %%A in ('powershell -Command "(Invoke-WebRequest -Uri 'https://api.github.com/repos/Baba0bab/DS4Windows/releases/latest' -Headers @{ 'User-Agent' = 'Mozilla/5.0' }).Content | ConvertFrom-Json | Select-Object -ExpandProperty tag_name"') do (
         set LATEST_VERSION=%%A
     )
     
@@ -29,14 +29,10 @@ if /i "%VERSION_CHOICE%"=="y" (
     )
 )
 
-:: Prompt for architecture
-:prompt_arch
-set /p ARCH="Enter the architecture (x64 or x86, default is x64): "
-if "%ARCH%"=="" (
-    set ARCH=x64
-)
+:: Only x64 builds are published
+set ARCH=x64
 
-set BASE_URL=https://github.com/schmaldeo/DS4Windows/releases/download
+set BASE_URL=https://github.com/Baba0bab/DS4Windows/releases/download
 set DOWNLOAD_URL=%BASE_URL%/v!VERSION!/DS4Windows_!VERSION!_!ARCH!.zip
 
 :: Download the file

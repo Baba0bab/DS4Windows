@@ -214,7 +214,9 @@ namespace DS4WinWPF.DS4Forms
                 {
                     try
                     {
-                        if (Changelog.CheckNewerVersionExists(out var version, false))
+                        // A version skipped from the updater window is only offered again by the manual check
+                        if (Changelog.CheckNewerVersionExists(out var version, false) &&
+                            version.ToString() != Global.LastVersionChecked)
                         {
                             DisplayUpdaterWindow(version.ToString());
                         }
@@ -250,112 +252,10 @@ namespace DS4WinWPF.DS4Forms
                 result = updaterWin.Result;
             });
 
+            // Updates are installed from the fork's release page
             if (result == MessageBoxResult.Yes)
             {
-                bool launch = true;
-                launch = mainWinVM.RunUpdaterCheck(launch, out string newUpdaterVersion);
-
-                if (launch)
-                {
-                    launch = mainWinVM.LauchDS4Updater();
-                }
-
-                if (launch)
-                {
-                    // Set that the window is getting ready to close for other components
-                    contextclose = true;
-                    Dispatcher.BeginInvoke(Close);
-                }
-                else
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        MessageBox.Show(Properties.Resources.PleaseDownloadUpdater);
-                        if (!string.IsNullOrEmpty(newUpdaterVersion))
-                        {
-                            Util.StartProcessHelper(
-                                $"https://github.com/schmaldeo/DS4Updater/releases/tag/v{newUpdaterVersion}/{mainWinVM.updaterExe}");
-                        }
-                    });
-                }
-            }
-        }
-
-        private void Check_Version(bool showstatus = false)
-        {
-            string version = Global.exeversion;
-            string newversion = string.Empty;
-            string versionFilePath = Path.Combine(Global.appdatapath, "version.txt");
-            ulong lastVersionNum = Global.LastVersionCheckedNum;
-            //ulong lastVersion = Global.CompileVersionNumberFromString("2.1.1");
-
-            bool versionFileExists = File.Exists(versionFilePath);
-            if (versionFileExists)
-            {
-                newversion = File.ReadAllText(versionFilePath).Trim();
-                //newversion = "2.1.3";
-            }
-
-            ulong newversionNum = !string.IsNullOrEmpty(newversion) ?
-                Global.CompileVersionNumberFromString(newversion) : 0;
-
-            if (!string.IsNullOrWhiteSpace(newversion) && version.CompareTo(newversion) != 0 &&
-                lastVersionNum < newversionNum)
-            {
-                MessageBoxResult result = MessageBoxResult.No;
-                Dispatcher.Invoke(() =>
-                {
-                    UpdaterWindow updaterWin = new UpdaterWindow(newversion);
-                    updaterWin.ShowDialog();
-                    result = updaterWin.Result;
-                });
-
-                if (result == MessageBoxResult.Yes)
-                {
-                    bool launch = true;
-                    launch = mainWinVM.RunUpdaterCheck(launch, out string newUpdaterVersion);
-
-                    if (launch)
-                    {
-                        launch = mainWinVM.LauchDS4Updater();
-                    }
-
-                    if (launch)
-                    {
-                        // Set that the window is getting ready to close for other components
-                        contextclose = true;
-                        Dispatcher.BeginInvoke((Action)(() =>
-                        {
-                            Close();
-                        }));
-                    }
-                    else
-                    {
-                        Dispatcher.Invoke(() =>
-                        {
-                            MessageBox.Show(Properties.Resources.PleaseDownloadUpdater);
-                            if (!string.IsNullOrEmpty(newUpdaterVersion))
-                            {
-                                Util.StartProcessHelper($"https://github.com/schmaldeo/DS4Updater/releases/tag/v{newUpdaterVersion}/{mainWinVM.updaterExe}");
-                            }
-                        });
-                    }
-                }
-                else
-                {
-                    if (versionFileExists)
-                        File.Delete(versionFilePath);
-                }
-            }
-            else
-            {
-                if (versionFileExists)
-                    File.Delete(versionFilePath);
-
-                if (showstatus)
-                {
-                    Dispatcher.Invoke(() => MessageBox.Show(Properties.Resources.UpToDate, "DS4Windows Updater"));
-                }
+                Util.StartProcessHelper(Changelog.ReleasePageUri(version));
             }
         }
 

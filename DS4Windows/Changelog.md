@@ -37,6 +37,11 @@ First release of the Baba0bab fork, based on DS4Windows 3.9.9 by schmaldeo.
 * Errors during special actions no longer crash the app
 * The "last update check" date is now stored culture-invariant (day and month were swapped on non-US systems)
 
+**Updates**
+* The update check now looks for releases of this fork instead of the discontinued upstream project. Accepting an update opens its release page; DS4Updater is no longer downloaded
+* "Skip this version" is now honored by the automatic check at startup
+* Releases ship an installer, a portable zip and SHA-256 checksums
+
 **Tests and documentation**
 * Fixed outdated test fixtures and added debouncer tests (16 of 16 tests pass)
 * Added build and install guide (COMPIL.md) and a summary of the fixes (AMELIORATIONS.md)

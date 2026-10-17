@@ -3292,8 +3292,13 @@ namespace DS4Windows
 
     public class Changelog
     {
-        public const string GITHUB_RELEASES_API_URI = "https://api.github.com/repos/schmaldeo/DS4Windows/releases";
-        public const string GITHUB_LATEST_RELEASE_API_URI = "https://api.github.com/repos/schmaldeo/DS4Windows/releases/latest";
+        // Updates come from this fork; the upstream releases are only shown as history
+        public const string GITHUB_REPO_URI = "https://github.com/Baba0bab/DS4Windows";
+        public const string GITHUB_RELEASES_API_URI = "https://api.github.com/repos/Baba0bab/DS4Windows/releases";
+        public const string GITHUB_LATEST_RELEASE_API_URI = "https://api.github.com/repos/Baba0bab/DS4Windows/releases/latest";
+        public const string UPSTREAM_RELEASES_API_URI = "https://api.github.com/repos/schmaldeo/DS4Windows/releases";
+
+        public static string ReleasePageUri(string version) => $"{GITHUB_REPO_URI}/releases/tag/v{version}";
 
         private static bool? _newerVersionAvailable = null;
         private static Version _latestVersion;
@@ -3342,13 +3347,15 @@ namespace DS4Windows
             return false;
         }
 
-        public static async Task<Dictionary<Version, string>> GetChangelog(bool allVersions = false)
+        public static async Task<Dictionary<Version, string>> GetChangelog(bool allVersions = false, bool upstream = false)
         {
             Dictionary<Version, string> dict = new();
 
             if (!Version.TryParse(Global.exeversion, out var currentVersion)) return dict;
 
-            var request = await App.requestClient.GetAsync(GITHUB_RELEASES_API_URI);
+            var request = await App.requestClient.GetAsync(upstream ? UPSTREAM_RELEASES_API_URI : GITHUB_RELEASES_API_URI);
+            if (!request.IsSuccessStatusCode) return dict;
+
             var releases = await request.Content.ReadFromJsonAsync<GithubRelease[]>();
 
             foreach (var release in releases)
@@ -3378,9 +3385,9 @@ namespace DS4Windows
             }
         }
 
-        public static async Task<string> GetChangelogMarkdown(bool allVersions = false)
+        public static async Task<string> GetChangelogMarkdown(bool allVersions = false, bool upstream = false)
         {
-            var versions = await GetChangelog(allVersions);
+            var versions = await GetChangelog(allVersions, upstream);
 
             StringBuilder sb = new();
             foreach (var version in versions)

@@ -53,7 +53,7 @@ namespace DS4WinWPF.DS4Forms.ViewModels
 
             try
             {
-                var upstream = await Changelog.GetChangelogMarkdown(true);
+                var upstream = await Changelog.GetChangelogMarkdown(true, upstream: true);
                 Markdown = string.IsNullOrEmpty(local)
                     ? upstream
                     : local + Environment.NewLine + Environment.NewLine + upstream;

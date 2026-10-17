@@ -1,25 +1,11 @@
-# DISCONTINUATION
+# DS4Windows (Baba0bab fork)
 
-**I'm sad to announce that I will be discontinuing any further work on this project.**
+This is a maintained continuation of [schmaldeo/DS4Windows](https://github.com/schmaldeo/DS4Windows),
+which was discontinued after version 3.9.9 (see the original repository for the author's note).
+Version 4.0.0 moves the app to .NET 10, modernizes the interface and fixes many stability issues
+in controller connection and detection. See the [changelog](DS4Windows/Changelog.md) for details.
 
-I initially wanted to take a short break and come back to the project, 
-however with 1) lack of time for development due to both work and personal life and 2) the development of machine learning technologies I'm just not willing
-to put any more work into it. Especially the 2nd point made me completely lose interest in it. 
-
-Open source software, something I once valued way more than
-proprietary software, has now become a clown show due to so-called _vibe coders_. People's contributions to OSS were once a great learning experience, GitHub 
-used to be a place where you could exchange knowledge and build a nice resume as well as find many fantastic hobby projects you could make use of. 
-I've learnt that myself. Now, seeing many OSS projects receive many completely trash and meaningless pull requests and GitHub being flooded with very 
-low quality or straight up vulnerable on all fronts code, I lost my faith in it. 
-
-My goal with this project was producing good (for obvious reasons not perfect, but still goot) quality code and delivering what people wanted. 
-**To learn and become a better software engineer.** All the motivation I had to do that is completely gone now.
-
-Thank you for all the contributors, people who helped me develop it and people who reported bugs and feature requests.
-
-It was a good ride.
-
-Maybe one day we will come back to the way the things were before.
+The app checks this repository for new versions and offers to open the release page when one is available.
 
 ## DS4Windows
 
@@ -36,15 +22,6 @@ for DS3 based on accelerometer value (which is a work of [sunnyqeen](https://git
 
 ![DS4Windows Preview](https://raw.githubusercontent.com/Ryochan7/DS4Windows/jay/ds4winwpf_screen_20200412.png)
 
-## About this fork
-
-I've made this fork because some of the buttons on my controller started bouncing. Normally I would just add a
-feature that would fix my problem, make a pull request to the original repo and forget about the project. 
-The issue here is that Ryochan7 stopped maintaining the original project, so I decided to make slight 
-modifications to the code that detects if the installed version is up-to-date, so it now pulls version info from my 
-repo. This way if you install my version, you don't get the annoying popup saying your version is outdated. If there 
-are any feature requests, I'm more than happy to at least look at them and assess whether I could add them.
-
 ## License
 
 DS4Windows is licensed under the terms of the GNU General Public License version 3.
@@ -54,20 +31,23 @@ available in this source code from the COPYING file.
 
 ## Downloads
 
-- **[Main builds of DS4Windows](https://github.com/schmaldeo/DS4Windows/releases)**
+- **[Releases of this fork](https://github.com/Baba0bab/DS4Windows/releases)**
 
 ## Install
 
-You can install DS4Windows by downloading it from [releases](https://github.com/schmaldeo/DS4Windows/releases) and place it to your preferred place.
+Download `DS4Windows_<version>_x64_Setup.exe` from the [releases](https://github.com/Baba0bab/DS4Windows/releases) and run it.
+It installs for the current user without admin rights by default, adds a Start menu shortcut and an uninstaller,
+and installing a newer version over it keeps your profiles.
 
-Alternatively, you can install [`ds4windows`](https://scoop.sh/#/apps?q=ds4windows&o=true&id=c8b519fcb06da6bb014569fd0a07521839ec5425) via [Scoop](https://scoop.sh/).
+Alternatively, download the portable `DS4Windows_<version>_x64.zip` and extract it to your preferred place.
+`SHA256SUMS.txt` in each release lets you check the downloaded files.
 
-Alternatively, you can download [`ds4w.bat`](https://raw.githubusercontent.com/schmaldeo/DS4Windows/refs/heads/master/ds4w.bat) file and execute it. It will open a window that downloads and places the program in `%LOCALAPPDATA%\DS4Windows` and creates a desktop shortcut to the executable.
+Alternatively, you can download [`ds4w.bat`](https://raw.githubusercontent.com/Baba0bab/DS4Windows/refs/heads/master/ds4w.bat) file and execute it. It will open a window that downloads and places the program in `%LOCALAPPDATA%\DS4Windows` and creates a desktop shortcut to the executable.
 
 ## Requirements
 
 - Windows 10 or newer (Thanks Microsoft)
-- Microsoft .NET 10.0 Desktop Runtime. [Download (x64 or x86)](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
+- Microsoft .NET 10.0 Desktop Runtime (x64). [Download](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 - Visual C++ 2015-2022 Redistributable. [x64](https://aka.ms/vs/17/release/vc_redist.x64.exe) or [x86](https://aka.ms/vs/17/release/vc_redist.x86.exe)
 - [ViGEmBus](https://vigem.org/) driver (DS4Windows will install it for you)
 - **Sony** DualShock 4 or other supported controller

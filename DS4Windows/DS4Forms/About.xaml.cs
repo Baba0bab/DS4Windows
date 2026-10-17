@@ -42,7 +42,7 @@ namespace DS4WinWPF.DS4Forms
 
         private void SourceLink_Click(object sender, RoutedEventArgs e)
         {
-            Util.StartProcessHelper("https://github.com/schmaldeo/DS4Windows");
+            Util.StartProcessHelper(Changelog.GITHUB_REPO_URI);
         }
 
         private void Ryochan7Link_Click(object sender, RoutedEventArgs e)

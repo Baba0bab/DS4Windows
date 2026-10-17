@@ -67,6 +67,8 @@ powershell -ExecutionPolicy Bypass -File installer\build.ps1
 - Résultat : `installer\Output\DS4Windows_<version>_x64_Setup.exe` (~5 Mo). La version
   est lue dans `DS4Windows\DS4WinWPF.csproj` (`<Version>`).
 - Variante qui embarque .NET (pour un PC sans .NET 10) : ajouter `-SelfContained`.
+- Le même script produit aussi `DS4Windows_<version>_x64.zip` (version portable) et
+  `SHA256SUMS.txt` (empreintes des fichiers), dans `installer\Output\`.
 - `installer\publish\` et `installer\Output\` sont ignorés par Git.
 - Le script de l'installeur est `installer\DS4Windows.iss`. Ne **jamais** changer son `AppId` :
   c'est lui qui permet d'installer une nouvelle version par-dessus l'ancienne.
@@ -103,8 +105,10 @@ Ce que fait l'installeur :
 5. **Démarrage auto** : onglet Paramètres → cocher « Lancer au démarrage ».
 6. Faire un raccourci vers `C:\Programmes\DS4Windows\DS4Windows.exe` (bureau / menu Démarrer).
 
-> La vérification de mises à jour interroge le dépôt de schmaldeo : comme il est arrêté
-> en 3.9.9 (inférieure à ma 4.0.0), l'appli dira toujours « à jour » et n'écrasera jamais ma version.
+> La vérification de mises à jour interroge **mon** dépôt (`Baba0bab/DS4Windows`, release
+> marquée « Latest »). Si une version plus récente existe, l'appli affiche ses notes et
+> « Oui » ouvre la page de la release dans le navigateur : rien n'est téléchargé ni remplacé
+> automatiquement.
 
 ---
 
@@ -177,7 +181,29 @@ git remote set-url upstream https://github.com/AUTEUR/DS4Windows.git
 
 ---
 
-## 6. Dépannage rapide
+## 6. Publier une nouvelle version (release GitHub)
+
+C'est ce que l'appli consulte pour proposer une mise à jour : le **tag** donne le numéro
+(`v4.1.0` → 4.1.0) et la **description** de la release sert de notes de version.
+
+1. Mettre le numéro dans `DS4Windows\DS4WinWPF.csproj` (`<Version>`, `<AssemblyVersion>`,
+   `<FileVersion>`) et ajouter la section correspondante en haut de `DS4Windows\Changelog.md`.
+2. Committer et pousser (`git push origin master`).
+3. Construire : `powershell -ExecutionPolicy Bypass -File installeruild.ps1`
+4. Créer la release avec ses fichiers (le tag est créé sur `master`) :
+   ```bash
+   gh release create v4.1.0 --repo Baba0bab/DS4Windows --title "DS4Windows 4.1.0" --notes-file notes.md installer/Output/DS4Windows_4.1.0_x64_Setup.exe installer/Output/DS4Windows_4.1.0_x64.zip installer/Output/SHA256SUMS.txt
+   ```
+   `notes.md` : copier la section de la version depuis `Changelog.md`.
+
+- Garder les noms de fichiers produits par `build.ps1` : `ds4w.bat` (et plus tard la mise à
+  jour automatique) les retrouvent d'après le numéro de version.
+- Une release « pre-release » n'est jamais proposée aux utilisateurs : pratique pour tester.
+- Le tag doit toujours commencer par `v` suivi d'un numéro `X.Y.Z`.
+
+---
+
+## 7. Dépannage rapide
 
 | Problème | Solution |
 |----------|----------|
