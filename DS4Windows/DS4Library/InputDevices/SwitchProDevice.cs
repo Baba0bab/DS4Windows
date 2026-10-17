@@ -356,7 +356,7 @@ namespace DS4Windows.InputDevices
             {
                 Debouncer = SetupDebouncer();
                 firstActive = DateTime.UtcNow;
-                NativeMethods.HidD_SetNumInputBuffers(hDevice.SafeReadHandle.DangerousGetHandle(), 3);
+                hDevice.SetNumInputBuffers(3);
                 Queue<long> latencyQueue = new Queue<long>(21); // Set capacity at max + 1 to avoid any resizing
                 int tempLatencyCount = 0;
                 long oldtime = 0;
@@ -887,8 +887,10 @@ namespace DS4Windows.InputDevices
                     HidDevice.ReadStatus res;
                     res = hDevice.ReadFile(tmpReport, SUBCOMMAND_RESPONSE_TIMEOUT);
                     int tries = 1;
+                    // Wait for the 0x21 reply that matches this subcommand. Regular
+                    // 0x30 input reports can arrive in between
                     while (res == HidDevice.ReadStatus.Success &&
-                        tmpReport[0] != 0x21 && tmpReport[14] != subcommand && tries < 100)
+                        (tmpReport[0] != 0x21 || tmpReport[14] != subcommand) && tries < 100)
                     {
                         //Console.WriteLine("TRY AGAIN: {0}", tmpReport[0]);
                         res = hDevice.ReadFile(tmpReport, SUBCOMMAND_RESPONSE_TIMEOUT);
@@ -913,6 +915,12 @@ namespace DS4Windows.InputDevices
                 tmpBuffer.SequenceEqual<byte>([0x1D, 0x80, 0x00, 0x00, 0x09]))   // RIGHT STICK USER    CALIB
             {
                 var SPI_RESP_OFFSET = 20;
+                if (tmpReport.Length < SPI_RESP_OFFSET + 9)
+                {
+                    // No reply received (write failure or no response requested). Retry
+                    return true;
+                }
+
                 var stickCalib = new ushort[6];
                 stickCalib[0] = (ushort)(((tmpReport[1 + SPI_RESP_OFFSET] << 8) & 0xF00) | tmpReport[0 + SPI_RESP_OFFSET]); // X Axis Max above center
                 stickCalib[1] = (ushort)((tmpReport[2 + SPI_RESP_OFFSET] << 4) | (tmpReport[1 + SPI_RESP_OFFSET] >> 4)); // Y Axis Max above center

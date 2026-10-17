@@ -833,31 +833,42 @@ namespace DS4Windows
                 udpChangeStatus = true;
                 TestQueueBus(() =>
                 {
-                    _udpServer = new UdpServer(GetPadDetailForIdx);
-                    if (openPort)
+                    try
                     {
-                        // Change thread affinity of object to have normal priority
-                        Task.Run(() =>
+                        _udpServer = new UdpServer(GetPadDetailForIdx);
+                        if (openPort)
                         {
-                            var UDP_SERVER_PORT = Global.getUDPServerPortNum();
-                            var UDP_SERVER_LISTEN_ADDRESS = Global.getUDPServerListenAddress();
-
-                            try
+                            // Change thread affinity of object to have normal priority
+                            Task.Run(() =>
                             {
-                                _udpServer.Start(UDP_SERVER_PORT, UDP_SERVER_LISTEN_ADDRESS);
-                                LogDebug($"UDP server listening on address {UDP_SERVER_LISTEN_ADDRESS} port {UDP_SERVER_PORT}");
-                            }
-                            catch (System.Net.Sockets.SocketException ex)
-                            {
-                                var errMsg = String.Format("Couldn't start UDP server on address {0}:{1}, outside applications won't be able to access pad data ({2})", UDP_SERVER_LISTEN_ADDRESS, UDP_SERVER_PORT, ex.SocketErrorCode);
+                                var UDP_SERVER_PORT = Global.getUDPServerPortNum();
+                                var UDP_SERVER_LISTEN_ADDRESS = Global.getUDPServerListenAddress();
 
-                                LogDebug(errMsg, true);
-                                AppLogger.LogToTray(errMsg, true, true);
-                            }
-                        }).Wait();
+                                try
+                                {
+                                    _udpServer.Start(UDP_SERVER_PORT, UDP_SERVER_LISTEN_ADDRESS);
+                                    LogDebug($"UDP server listening on address {UDP_SERVER_LISTEN_ADDRESS} port {UDP_SERVER_PORT}");
+                                }
+                                catch (System.Net.Sockets.SocketException ex)
+                                {
+                                    var errMsg = String.Format("Couldn't start UDP server on address {0}:{1}, outside applications won't be able to access pad data ({2})", UDP_SERVER_LISTEN_ADDRESS, UDP_SERVER_PORT, ex.SocketErrorCode);
+
+                                    LogDebug(errMsg, true);
+                                    AppLogger.LogToTray(errMsg, true, true);
+                                }
+                                catch (Exception ex)
+                                {
+                                    // Invalid listen address for example
+                                    LogDebug($"Couldn't start UDP server: {ex.Message}", true);
+                                }
+                            }).Wait();
+                        }
                     }
-
-                    udpChangeStatus = false;
+                    finally
+                    {
+                        // Start() spin-waits on this flag. Always release it
+                        udpChangeStatus = false;
+                    }
                 });
             }
             else if (!state && _udpServer != null)
@@ -865,10 +876,21 @@ namespace DS4Windows
                 TestQueueBus(() =>
                 {
                     udpChangeStatus = true;
-                    _udpServer.Stop();
-                    _udpServer = null;
+                    try
+                    {
+                        _udpServer?.Stop();
+                    }
+                    catch (Exception ex)
+                    {
+                        LogDebug($"Error while closing UDP server: {ex.Message}", true);
+                    }
+                    finally
+                    {
+                        _udpServer = null;
+                        udpChangeStatus = false;
+                    }
+
                     AppLogger.LogToGui("Closed UDP server", false);
-                    udpChangeStatus = false;
 
                     for (int i = 0; i < UdpServer.NUMBER_SLOTS; i++)
                     {
@@ -946,9 +968,26 @@ namespace DS4Windows
             }
         }
 
-        private bool udpChangeStatus = false;
+        private volatile bool udpChangeStatus = false;
         public bool changingUDPPort = false;
         public async void UseUDPPort()
+        {
+            // async void: any exception escaping here would terminate the process
+            try
+            {
+                await UseUDPPortInner();
+            }
+            catch (Exception ex)
+            {
+                LogDebug($"Couldn't restart UDP server: {ex.Message}", true);
+            }
+            finally
+            {
+                changingUDPPort = false;
+            }
+        }
+
+        private async Task UseUDPPortInner()
         {
             changingUDPPort = true;
             IEnumerable<DS4Device> devices = DS4Devices.getDS4Controllers();
@@ -968,9 +1007,15 @@ namespace DS4Windows
             var UDP_SERVER_PORT = Global.getUDPServerPortNum();
             var UDP_SERVER_LISTEN_ADDRESS = Global.getUDPServerListenAddress();
 
+            UdpServer udpServer = _udpServer;
+            if (udpServer == null)
+            {
+                return;
+            }
+
             try
             {
-                _udpServer.Start(UDP_SERVER_PORT, UDP_SERVER_LISTEN_ADDRESS);
+                udpServer.Start(UDP_SERVER_PORT, UDP_SERVER_LISTEN_ADDRESS);
                 foreach (DS4Device dev in devices)
                 {
                     dev.queueEvent(() =>
@@ -990,8 +1035,6 @@ namespace DS4Windows
                 LogDebug(errMsg, true);
                 AppLogger.LogToTray(errMsg, true, true);
             }
-
-            changingUDPPort = false;
         }
 
         private void WarnExclusiveModeFailure(DS4Device device)
@@ -1631,6 +1674,9 @@ namespace DS4Windows
                     for (var devEnum = devices.GetEnumerator();
                         devEnum.MoveNext() && loopControllers; i++)
                     {
+                        if (i >= CURRENT_DS4_CONTROLLER_LIMIT || i >= DS4Controllers.Length) // out of Xinput devices!
+                            break;
+
                         DS4Device device = devEnum.Current;
 
                         BeginPrepareConnectedInputController(device, showlog: true);
@@ -1670,9 +1716,6 @@ namespace DS4Windows
                         DS4Controllers[i] = device;
                         device.DeviceSlotNumber = i;
                         PrepareConnectedInputControllerSettingEvents(numControllers, device, index: i);
-
-                        if (i >= CURRENT_DS4_CONTROLLER_LIMIT) // out of Xinput devices!
-                            break;
                     }
                 }
                 catch (Exception e)
@@ -1918,6 +1961,22 @@ namespace DS4Windows
             if (running)
             {
                 inServiceTask = true;
+                try
+                {
+                    HotPlugInner();
+                }
+                finally
+                {
+                    inServiceTask = false;
+                }
+            }
+
+            return true;
+        }
+
+        private void HotPlugInner()
+        {
+            {
                 loopControllers = true;
                 eventDispatcher.Invoke(() =>
                 {
@@ -2036,11 +2095,7 @@ namespace DS4Windows
                         }
                     }
                 }
-
-                inServiceTask = false;
             }
-
-            return true;
         }
 
         private void PrepareConnectedInputControllerSettingEvents(int numControllers, DS4Device device, int index)

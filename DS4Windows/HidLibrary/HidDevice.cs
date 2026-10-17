@@ -1,11 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.IO;
-using System.Threading.Tasks;
 using Windows.Win32;
-using Windows.Win32.Foundation;
-using Windows.Win32.Security;
 using Windows.Win32.Storage.FileSystem;
 using Microsoft.Win32.SafeHandles;
 namespace DS4Windows
@@ -22,6 +18,11 @@ namespace DS4Windows
             NotConnected = 5
         }
 
+        private const int ERROR_IO_PENDING = 997;
+        private const int ERROR_INVALID_HANDLE = 6;
+        private const int WAIT_TIMEOUT = 258;
+        private const uint INFINITE = uint.MaxValue;
+
         private readonly string _description;
         private readonly string _devicePath;
         private readonly string _parentPath;
@@ -30,10 +31,17 @@ namespace DS4Windows
         private readonly HidDeviceCapabilities _deviceCapabilities;
         //private bool _monitorDeviceEvents;
         private string serial = null;
-        private SafeFileHandle safeReadHandle;
-        private bool isOpen;
+        private volatile SafeFileHandle safeReadHandle;
+        private volatile bool isOpen;
         private bool isExclusive;
+        private readonly object handleLock = new object();
         private const string BLANK_SERIAL = "00:00:00:00:00:00";
+
+        // Reusable OVERLAPPED structures. Input and output reports are normally
+        // performed on different threads so each direction gets its own context.
+        // Avoids creating a kernel event object for every single report
+        private readonly OverlappedContext readContext = new OverlappedContext();
+        private readonly OverlappedContext writeContext = new OverlappedContext();
 
         internal HidDevice(string devicePath, string description = null, string parentPath = null)
         {
@@ -43,12 +51,10 @@ namespace DS4Windows
 
             try
             {
-                var hidHandle = OpenHandle(_devicePath, false, enumerate: true);
+                using var hidHandle = OpenHandle(_devicePath, false, enumerate: true);
 
                 _deviceAttributes = GetDeviceAttributes(hidHandle);
                 _deviceCapabilities = GetDeviceCapabilities(hidHandle);
-
-                hidHandle.Close();
             }
             catch (Exception exception)
             {
@@ -78,65 +84,136 @@ namespace DS4Windows
 
         public void OpenDevice(bool exclusive)
         {
-            if (IsOpen) return;
-            try
+            lock (handleLock)
             {
-                if (SafeReadHandle == null || SafeReadHandle.IsInvalid)
-                    SafeReadHandle = OpenHandle(_devicePath, exclusive, enumerate: false);
-            }
-            catch (Exception exception)
-            {
-                IsOpen = false;
-                throw new Exception("Error opening HID device.", exception);
-            }
+                if (IsOpen) return;
+                try
+                {
+                    SafeFileHandle current = SafeReadHandle;
+                    if (current == null || current.IsInvalid || current.IsClosed)
+                    {
+                        current?.Dispose();
+                        SafeReadHandle = OpenHandle(_devicePath, exclusive, enumerate: false);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    IsOpen = false;
+                    throw new Exception("Error opening HID device.", exception);
+                }
 
-            IsOpen = !SafeReadHandle.IsInvalid;
-            IsExclusive = exclusive;
+                IsOpen = !SafeReadHandle.IsInvalid;
+                IsExclusive = exclusive;
+            }
         }
 
         public void CloseDevice()
         {
-            if (!IsOpen) return;
+            SafeFileHandle handle;
+            lock (handleLock)
+            {
+                if (!IsOpen) return;
 
-            IsOpen = false;
+                IsOpen = false;
+                handle = SafeReadHandle;
+            }
+
+            if (handle != null && !handle.IsInvalid && !handle.IsClosed)
+            {
+                // Wake up any thread blocked in a read or write first. The
+                // SafeHandle defers the real CloseHandle call until all pending
+                // P/Invoke calls using the handle have released it
+                CancelAllIo(handle);
+                handle.Dispose();
+            }
         }
 
         public void Dispose()
         {
             CancelIO();
             CloseDevice();
+            GC.SuppressFinalize(this);
         }
 
         public void CancelIO()
         {
             if (IsOpen)
-                NativeMethods.CancelIoEx(SafeReadHandle.DangerousGetHandle(), IntPtr.Zero);
+                CancelAllIo(SafeReadHandle);
+        }
+
+        private static void CancelAllIo(SafeFileHandle handle)
+        {
+            if (handle == null || handle.IsInvalid || handle.IsClosed)
+                return;
+
+            bool addedRef = false;
+            try
+            {
+                handle.DangerousAddRef(ref addedRef);
+                NativeMethods.CancelIoEx(handle.DangerousGetHandle(), IntPtr.Zero);
+            }
+            catch (ObjectDisposedException) { }
+            finally
+            {
+                if (addedRef) handle.DangerousRelease();
+            }
+        }
+
+        /// <summary>
+        /// Return the handle only when it is usable for I/O
+        /// </summary>
+        private SafeFileHandle UsableHandle()
+        {
+            SafeFileHandle handle = SafeReadHandle;
+            if (handle == null || handle.IsInvalid || handle.IsClosed)
+                return null;
+
+            return handle;
         }
 
         [Obsolete("Unused.")]
         public bool ReadInputReport(byte[] data)
         {
-            if (SafeReadHandle == null)
-                SafeReadHandle = OpenHandle(_devicePath, true, enumerate: false);
-            return NativeMethods.HidD_GetInputReport(SafeReadHandle, data, data.Length);
+            SafeFileHandle handle = UsableHandle();
+            if (handle == null) return false;
+
+            try
+            {
+                return NativeMethods.HidD_GetInputReport(handle, data, data.Length);
+            }
+            catch (ObjectDisposedException) { return false; }
         }
 
         public bool WriteFeatureReport(byte[] data)
         {
-            bool result = false;
-            if (IsOpen && SafeReadHandle != null)
-            {
-                result = NativeMethods.HidD_SetFeature(SafeReadHandle, data, data.Length);
-            }
+            SafeFileHandle handle = UsableHandle();
+            if (!IsOpen || handle == null) return false;
 
-            return result;
+            try
+            {
+                return NativeMethods.HidD_SetFeature(handle, data, data.Length);
+            }
+            catch (ObjectDisposedException) { return false; }
+        }
+
+        public bool SetNumInputBuffers(int numberBuffers)
+        {
+            SafeFileHandle handle = UsableHandle();
+            if (handle == null) return false;
+
+            try
+            {
+                return NativeMethods.HidD_SetNumInputBuffers(handle, numberBuffers);
+            }
+            catch (ObjectDisposedException) { return false; }
         }
 
         private static HidDeviceAttributes GetDeviceAttributes(SafeFileHandle hidHandle)
         {
             var deviceAttributes = default(NativeMethods.HIDD_ATTRIBUTES);
             deviceAttributes.Size = Marshal.SizeOf(deviceAttributes);
-            NativeMethods.HidD_GetAttributes(hidHandle.DangerousGetHandle(), ref deviceAttributes);
+            if (!hidHandle.IsInvalid)
+                NativeMethods.HidD_GetAttributes(hidHandle.DangerousGetHandle(), ref deviceAttributes);
             return new HidDeviceAttributes(deviceAttributes);
         }
 
@@ -145,7 +222,8 @@ namespace DS4Windows
             var capabilities = default(NativeMethods.HIDP_CAPS);
             var preparsedDataPointer = default(IntPtr);
 
-            if (!NativeMethods.HidD_GetPreparsedData(hidHandle.DangerousGetHandle(), ref preparsedDataPointer))
+            if (hidHandle.IsInvalid ||
+                !NativeMethods.HidD_GetPreparsedData(hidHandle.DangerousGetHandle(), ref preparsedDataPointer))
                 return new HidDeviceCapabilities(capabilities);
 
             NativeMethods.HidP_GetCaps(preparsedDataPointer, ref capabilities);
@@ -157,53 +235,122 @@ namespace DS4Windows
         [Obsolete("Unused.")]
         public void flush_Queue()
         {
-            if (SafeReadHandle != null)
+            SafeFileHandle handle = UsableHandle();
+            if (handle != null)
             {
-                NativeMethods.HidD_FlushQueue(SafeReadHandle);
+                NativeMethods.HidD_FlushQueue(handle);
             }
         }
 
-        public unsafe ReadStatus ReadFile(Span<byte> inputBuffer, uint timeout = uint.MaxValue)
+        /// <summary>
+        /// Read an input report. A finite timeout (in ms) cancels the pending read
+        /// and returns <see cref="ReadStatus.WaitTimedOut"/> if no report arrived.
+        /// </summary>
+        public ReadStatus ReadFile(Span<byte> inputBuffer, uint timeout = INFINITE)
         {
-            SafeReadHandle ??= OpenHandle(_devicePath, true, false);
-
-            using AutoResetEvent wait = new(false);
-
-            var ov = new NativeOverlapped { EventHandle = wait.SafeWaitHandle.DangerousGetHandle() };
-
-            if (PInvoke.ReadFile(SafeReadHandle, inputBuffer, null, &ov))
-                return ReadStatus.Success;
-
-            if (Marshal.GetLastWin32Error() != (uint)WIN32_ERROR.ERROR_IO_PENDING) return ReadStatus.ReadError;
-
-            if (!PInvoke.GetOverlappedResultEx(SafeReadHandle, ov, out _, timeout, true))
-                return ReadStatus.ReadError;
-
-            return ReadStatus.Success;
+            return PerformOverlappedIo(readContext, inputBuffer, timeout, write: false);
         }
 
         public bool WriteOutputReportViaControl(byte[] outputBuffer)
         {
-            SafeReadHandle ??= OpenHandle(_devicePath, true, enumerate: false);
+            SafeFileHandle handle = UsableHandle();
+            if (handle == null) return false;
 
-            return NativeMethods.HidD_SetOutputReport(SafeReadHandle, outputBuffer, outputBuffer.Length);
+            try
+            {
+                return NativeMethods.HidD_SetOutputReport(handle, outputBuffer, outputBuffer.Length);
+            }
+            catch (ObjectDisposedException) { return false; }
         }
 
-        public unsafe bool WriteOutputReportViaInterrupt(byte[] outputBuffer, int timeout)
+        /// <summary>
+        /// Write an output report through the interrupt endpoint. The operation
+        /// always waits for completion (the timeout parameter is kept for API
+        /// compatibility). It gets aborted when the device is closed.
+        /// </summary>
+        public bool WriteOutputReportViaInterrupt(byte[] outputBuffer, int timeout)
         {
-                SafeReadHandle ??= OpenHandle(_devicePath, true, false);
-                using AutoResetEvent wait = new(false);
-                var ov = new NativeOverlapped { EventHandle = wait.SafeWaitHandle.DangerousGetHandle() };
+            return PerformOverlappedIo(writeContext, outputBuffer, INFINITE, write: true) == ReadStatus.Success;
+        }
 
-                if (PInvoke.WriteFile(SafeReadHandle, outputBuffer, null, &ov))
-                    return true;
+        private unsafe ReadStatus PerformOverlappedIo(OverlappedContext sharedContext, Span<byte> buffer,
+            uint timeout, bool write)
+        {
+            SafeFileHandle handle = UsableHandle();
+            if (handle == null)
+            {
+                Marshal.SetLastPInvokeError(ERROR_INVALID_HANDLE);
+                return ReadStatus.NotConnected;
+            }
 
-                if (Marshal.GetLastWin32Error() != (uint)WIN32_ERROR.ERROR_IO_PENDING) return false;
+            // Normal case: one thread per direction so the shared context is free.
+            // Fall back to a temporary context if another thread is using it
+            OverlappedContext context = sharedContext;
+            bool lockTaken = false;
+            bool addedRef = false;
+            try
+            {
+                Monitor.TryEnter(context.SyncRoot, ref lockTaken);
+                if (!lockTaken)
+                {
+                    context = new OverlappedContext();
+                }
 
-                if (!PInvoke.GetOverlappedResult(SafeReadHandle, ov, out _, true))
-                    return false;
+                handle.DangerousAddRef(ref addedRef);
+                IntPtr rawHandle = handle.DangerousGetHandle();
+                NativeOverlapped* overlapped = context.Prepare();
+                uint transferred = 0;
 
-                return true;
+                // Buffer stays pinned until the I/O operation is fully completed
+                // or cancelled, even when a timeout occurs
+                fixed (byte* bufferPtr = buffer)
+                {
+                    bool success = write
+                        ? NativeMethods.WriteFileOverlapped(rawHandle, bufferPtr, (uint)buffer.Length, null, overlapped)
+                        : NativeMethods.ReadFileOverlapped(rawHandle, bufferPtr, (uint)buffer.Length, null, overlapped);
+                    if (success)
+                        return ReadStatus.Success;
+
+                    if (Marshal.GetLastPInvokeError() != ERROR_IO_PENDING)
+                        return ReadStatus.ReadError;
+
+                    if (NativeMethods.GetOverlappedResultEx(rawHandle, overlapped, &transferred, timeout, false))
+                        return ReadStatus.Success;
+
+                    int waitError = Marshal.GetLastPInvokeError();
+
+                    // Whatever the failure, make sure the kernel is done with the buffer
+                    // and OVERLAPPED structure before leaving: cancel the request (no-op
+                    // if it already completed) and wait for its final status
+                    NativeMethods.CancelIoEx(rawHandle, overlapped);
+                    bool completed = NativeMethods.GetOverlappedResult(rawHandle, overlapped, &transferred, true);
+                    if (waitError == WAIT_TIMEOUT)
+                    {
+                        if (completed)
+                        {
+                            // Request completed before the cancellation took effect
+                            return ReadStatus.Success;
+                        }
+
+                        Marshal.SetLastPInvokeError(WAIT_TIMEOUT);
+                        return ReadStatus.WaitTimedOut;
+                    }
+
+                    Marshal.SetLastPInvokeError(waitError);
+                    return ReadStatus.ReadError;
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                Marshal.SetLastPInvokeError(ERROR_INVALID_HANDLE);
+                return ReadStatus.NotConnected;
+            }
+            finally
+            {
+                if (addedRef) handle.DangerousRelease();
+                if (lockTaken) Monitor.Exit(context.SyncRoot);
+                else if (!ReferenceEquals(context, sharedContext)) context.Dispose();
+            }
         }
 
         private SafeFileHandle OpenHandle(string devicePathName, bool isExclusive, bool enumerate)
@@ -225,7 +372,14 @@ namespace DS4Windows
 
         public bool readFeatureData(byte[] inputBuffer)
         {
-            return NativeMethods.HidD_GetFeature(SafeReadHandle.DangerousGetHandle(), inputBuffer, inputBuffer.Length);
+            SafeFileHandle handle = UsableHandle();
+            if (handle == null) return false;
+
+            try
+            {
+                return NativeMethods.HidD_GetFeature(handle, inputBuffer, inputBuffer.Length);
+            }
+            catch (ObjectDisposedException) { return false; }
         }
 
         public void resetSerial()
@@ -238,7 +392,7 @@ namespace DS4Windows
             if (serial != null)
                 return serial;
 
-            // Some devices don't have MAC address (especially gamepads with USB only suports in PC). If the serial number reading fails 
+            // Some devices don't have MAC address (especially gamepads with USB only suports in PC). If the serial number reading fails
             // then use dummy zero MAC address, because there is a good chance the gamepad stll works in DS4Windows app (the code would throw
             // an index out of bounds exception anyway without IF-THEN-ELSE checks after trying to read a serial number).
 
@@ -254,12 +408,16 @@ namespace DS4Windows
             else
             {
                 byte[] buffer = new byte[126];
-#if WIN64
-                ulong bufferLen = 126;
-#else
-                uint bufferLen = 126;
-#endif
-                if (NativeMethods.HidD_GetSerialNumberString(SafeReadHandle.DangerousGetHandle(), buffer, bufferLen))
+                SafeFileHandle handle = UsableHandle();
+                bool success = false;
+                try
+                {
+                    success = handle != null &&
+                        NativeMethods.HidD_GetSerialNumberString(handle, buffer, (uint)buffer.Length);
+                }
+                catch (ObjectDisposedException) { }
+
+                if (success)
                 {
                     string MACAddr = System.Text.Encoding.Unicode.GetString(buffer).Replace("\0", string.Empty).ToUpper();
                     if (MACAddr.Length == 12)
@@ -301,7 +459,7 @@ namespace DS4Windows
                               + devPathItems[devPathItems.Length - 2].ToUpper()                 // 0
                               + devPathItems[devPathItems.Length - 1].TrimStart('0').ToUpper(); // 0001 -> 1
                 else if (devPathItems.Length >= 1)
-                    // Device and usb hub and port identifiers missing in devicePath string. Fallback to use vendor and product ID values and 
+                    // Device and usb hub and port identifiers missing in devicePath string. Fallback to use vendor and product ID values and
                     // take a number from the last part of the devicePath. Hopefully the last part is a usb port number as it usually should be.
                     MACAddr = this._deviceAttributes.VendorId.ToString("X4")
                               + this._deviceAttributes.ProductId.ToString("X4")
@@ -325,6 +483,51 @@ namespace DS4Windows
             }
 
             return MACAddr;
+        }
+
+        /// <summary>
+        /// Unmanaged OVERLAPPED structure plus its manual reset event. Memory is
+        /// released by the finalizer once nothing references the context anymore,
+        /// which guarantees no I/O request can still be using it.
+        /// </summary>
+        private sealed unsafe class OverlappedContext : IDisposable
+        {
+            private NativeOverlapped* overlapped;
+            private readonly ManualResetEvent completedEvent = new ManualResetEvent(false);
+            public readonly object SyncRoot = new object();
+
+            public OverlappedContext()
+            {
+                overlapped = (NativeOverlapped*)NativeMemory.AllocZeroed((nuint)sizeof(NativeOverlapped));
+            }
+
+            public NativeOverlapped* Prepare()
+            {
+                *overlapped = default;
+                overlapped->EventHandle = completedEvent.SafeWaitHandle.DangerousGetHandle();
+                return overlapped;
+            }
+
+            public void Dispose()
+            {
+                Free();
+                completedEvent.Dispose();
+                GC.SuppressFinalize(this);
+            }
+
+            private void Free()
+            {
+                if (overlapped != null)
+                {
+                    NativeMemory.Free(overlapped);
+                    overlapped = null;
+                }
+            }
+
+            ~OverlappedContext()
+            {
+                Free();
+            }
         }
     }
 }

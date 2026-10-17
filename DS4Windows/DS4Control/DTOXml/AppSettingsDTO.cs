@@ -17,6 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 using System;
+using System.Globalization;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Diagnostics;
@@ -236,13 +237,19 @@ namespace DS4WinWPF.DS4Control.DTOXml
             get; private set;
         }
 
+        private const string LAST_CHECKED_FORMAT = "MM/dd/yyyy HH:mm:ss";
+
         [XmlElement("LastChecked")]
         public string LastCheckString
         {
-            get => LastChecked.ToString("MM/dd/yyyy HH:mm:ss");
+            // Fixed format independent from the Windows regional settings. Parsing
+            // with the current culture swapped day and month on non US systems
+            get => LastChecked.ToString(LAST_CHECKED_FORMAT, CultureInfo.InvariantCulture);
             set
             {
-                if (DateTime.TryParse(value, out DateTime temp))
+                if (DateTime.TryParseExact(value, LAST_CHECKED_FORMAT, CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out DateTime temp) ||
+                    DateTime.TryParse(value, out temp))
                 {
                     LastChecked = temp;
                 }

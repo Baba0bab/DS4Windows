@@ -886,10 +886,15 @@ namespace DS4Windows
                 {
                     exitInputThread = true;
                     //ds4Input.Interrupt();
-                    if (!abortInputThread)
+                    if (!abortInputThread && ds4Input != Thread.CurrentThread)
                     {
+                        // A read started right after the cancel request would block
+                        // until the next report. Keep cancelling until the thread exits
                         hDevice.CancelIO();
-                        ds4Input.Join();
+                        while (!ds4Input.Join(50))
+                        {
+                            hDevice.CancelIO();
+                        }
                     }
                 }
                 catch (Exception e)
@@ -1027,7 +1032,7 @@ namespace DS4Windows
             {
                 Debouncer = SetupDebouncer();
                 firstActive = DateTime.UtcNow;
-                NativeMethods.HidD_SetNumInputBuffers(hDevice.SafeReadHandle.DangerousGetHandle(), 3);
+                hDevice.SetNumInputBuffers(3);
                 Queue<long> latencyQueue = new Queue<long>(21); // Set capacity at max + 1 to avoid any resizing
                 int tempLatencyCount = 0;
                 long oldtime = 0;
@@ -1151,7 +1156,9 @@ namespace DS4Windows
                                 int winError = Marshal.GetLastWin32Error();
                                 Console.WriteLine($"{Mac} {DateTime.UtcNow.ToString("o")}> disconnect due to read failure: {winError.ToString("x8")}");
                                 //Log.LogToGui(Mac.ToString() + " disconnected due to read failure: " + winError, true);
-                                AppLogger.LogToGui(Mac.ToString() + " disconnected due to read failure: " + winError, true);
+                                // Read cancelled on purpose by StopUpdate. Not a connection problem
+                                if (!exitInputThread)
+                                    AppLogger.LogToGui(Mac.ToString() + " disconnected due to read failure: " + winError, true);
                             }
 
                             readWaitEv.Reset();
@@ -1525,8 +1532,15 @@ namespace DS4Windows
 
         protected Debouncer SetupDebouncer()
         {
-            var debouncingMs = TimeSpan.FromMilliseconds(Global.DebouncingMs[deviceSlotNumber]);
-            Debouncer debouncer = new(debouncingMs);
+            // Read the setting on every report instead of subscribing to the static
+            // Global.DebouncingMsChanged event. The event kept every disconnected
+            // device alive forever
+            Debouncer debouncer = new(() =>
+            {
+                int slot = deviceSlotNumber;
+                int[] debouncingMs = Global.DebouncingMs;
+                return slot >= 0 && slot < debouncingMs.Length ? debouncingMs[slot] : 0;
+            });
             debouncer.AddDebouncer(nameof(DS4State.Cross));
             debouncer.AddDebouncer(nameof(DS4State.Triangle));
             debouncer.AddDebouncer(nameof(DS4State.Circle));
@@ -1548,10 +1562,6 @@ namespace DS4Windows
             debouncer.AddDebouncer(nameof(DS4State.DpadDown));
             debouncer.AddDebouncer(nameof(DS4State.DpadLeft));
             debouncer.AddDebouncer(nameof(DS4State.DpadRight));
-            Global.DebouncingMsChanged += (_, _) =>
-            {
-                debouncer.SetDuration(TimeSpan.FromMilliseconds(Global.DebouncingMs[deviceSlotNumber]));
-            };
             return debouncer;
         }
 

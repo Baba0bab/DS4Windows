@@ -3953,6 +3953,21 @@ namespace DS4Windows
         private static async void MapCustomAction(int device, DS4State cState, DS4State MappedState,
             DS4StateExposed eState, Mouse tp, ControlService ctrl, DS4StateFieldMapping fieldMapping, DS4StateFieldMapping outputfieldMapping)
         {
+            // async void: an exception escaping from here would terminate the
+            // process (ex: controller removed while an action runs)
+            try
+            {
+                await MapCustomActionInner(device, cState, MappedState, eState, tp, ctrl, fieldMapping, outputfieldMapping);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogToGui($"Special action error on controller {device + 1}: {ex.Message}", true);
+            }
+        }
+
+        private static async Task MapCustomActionInner(int device, DS4State cState, DS4State MappedState,
+            DS4StateExposed eState, Mouse tp, ControlService ctrl, DS4StateFieldMapping fieldMapping, DS4StateFieldMapping outputfieldMapping)
+        {
             /* TODO: This method is slow sauce. Find ways to speed up action execution */
             try
             {

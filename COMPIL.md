@@ -9,11 +9,12 @@ Toutes les commandes se lancent depuis la racine du dépôt : `C:\serveurs\DS4Wi
 
 ## 0. Prérequis
 
-- **SDK .NET 8** (déjà installé sur mon PC). Vérifier avec :
+- **SDK .NET 10** (déjà installé sur mon PC). Vérifier avec :
   ```bash
   dotnet --list-sdks
   ```
-  Il faut une ligne `8.0.xxx`. Sinon, télécharger le SDK .NET 8 sur https://dotnet.microsoft.com/download/dotnet/8.0
+  Il faut une ligne `10.0.xxx`. Sinon, télécharger le SDK .NET 10 sur https://dotnet.microsoft.com/download/dotnet/10.0
+  (le projet est passé de .NET 8 à .NET 10 en octobre 2026, le support de .NET 8 s'arrêtant le 10 novembre 2026).
 - **Git**.
 - Pas besoin de Visual Studio (mais on peut ouvrir `DS4WindowsWPF.sln` avec si on veut).
 
@@ -26,7 +27,7 @@ dotnet build DS4Windows/DS4WinWPF.csproj -c Release -p:Platform=x64
 ```
 
 - Durée : environ 15 secondes.
-- Résultat : `DS4Windows\bin\x64\Release\net8.0-windows\DS4Windows.exe`
+- Résultat : `DS4Windows\bin\x64\Release\net10.0-windows\DS4Windows.exe`
 - Les « warnings » (avertissements) sont normaux, seules les **erreurs** comptent.
 - Le dossier `bin\` est ignoré par Git, il ne sera jamais commité.
 
@@ -143,7 +144,7 @@ git remote set-url upstream https://github.com/AUTEUR/DS4Windows.git
 | Problème | Solution |
 |----------|----------|
 | `error MSB3027` / fichier verrouillé | Fermer DS4Windows (icône près de l'horloge) et relancer |
-| L'appli ne démarre pas | Installer le « .NET 8 Desktop Runtime » x64 |
+| L'appli ne démarre pas | Installer le « .NET 10 Desktop Runtime » x64 |
 | Manette détectée deux fois en jeu | Installer/configurer HidHide |
 | Pas de manette virtuelle Xbox | Installer ViGEmBus (Paramètres → « Installer les pilotes », ou dossier `extras\`) |
 | Repartir d'une compilation propre | Supprimer `DS4Windows\bin` et `DS4Windows\obj`, puis recompiler |

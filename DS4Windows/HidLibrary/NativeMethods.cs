@@ -82,6 +82,27 @@ namespace DS4Windows
         [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true, CharSet = CharSet.Auto)]
         static internal extern bool CancelIoEx(IntPtr hFile, IntPtr lpOverlapped);
 
+        // Blittable overlapped I/O helpers used by HidDevice. Buffers and
+        // OVERLAPPED structures must stay pinned until the operation completes
+        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+        static internal extern unsafe bool CancelIoEx(IntPtr hFile, System.Threading.NativeOverlapped* lpOverlapped);
+
+        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true, EntryPoint = "ReadFile")]
+        static internal extern unsafe bool ReadFileOverlapped(IntPtr hFile, byte* lpBuffer, uint nNumberOfBytesToRead,
+            uint* lpNumberOfBytesRead, System.Threading.NativeOverlapped* lpOverlapped);
+
+        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true, EntryPoint = "WriteFile")]
+        static internal extern unsafe bool WriteFileOverlapped(IntPtr hFile, byte* lpBuffer, uint nNumberOfBytesToWrite,
+            uint* lpNumberOfBytesWritten, System.Threading.NativeOverlapped* lpOverlapped);
+
+        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+        static internal extern unsafe bool GetOverlappedResultEx(IntPtr hFile, System.Threading.NativeOverlapped* lpOverlapped,
+            uint* lpNumberOfBytesTransferred, uint dwMilliseconds, bool bAlertable);
+
+        [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true)]
+        static internal extern unsafe bool GetOverlappedResult(IntPtr hFile, System.Threading.NativeOverlapped* lpOverlapped,
+            uint* lpNumberOfBytesTransferred, bool bWait);
+
         [DllImport("kernel32.dll", SetLastError = true, ExactSpelling = true, CharSet = CharSet.Auto)]
         static internal extern bool CancelSynchronousIo(IntPtr hObject);
 
@@ -469,6 +490,9 @@ namespace DS4Windows
         static internal extern bool HidD_GetFeature(IntPtr hidDeviceObject, byte[] lpReportBuffer, int reportBufferLength);
 
         [DllImport("hid.dll", SetLastError = true)]
+        static internal extern bool HidD_GetFeature(SafeFileHandle hidDeviceObject, byte[] lpReportBuffer, int reportBufferLength);
+
+        [DllImport("hid.dll", SetLastError = true)]
         internal static extern Boolean HidD_GetInputReport(SafeFileHandle HidDeviceObject, Byte[] lpReportBuffer, Int32 ReportBufferLength);        
 
         [DllImport("hid.dll")]
@@ -491,6 +515,9 @@ namespace DS4Windows
 
         [DllImport("hid.dll")]
         static internal extern bool HidD_SetNumInputBuffers(IntPtr hidDeviceObject, int numberBuffers);
+
+        [DllImport("hid.dll", SetLastError = true)]
+        static internal extern bool HidD_SetNumInputBuffers(SafeFileHandle hidDeviceObject, int numberBuffers);
         
         [DllImport("hid.dll")]
         static internal extern bool HidD_SetOutputReport(IntPtr hidDeviceObject, byte[] lpReportBuffer, int reportBufferLength);
@@ -504,12 +531,8 @@ namespace DS4Windows
         [DllImport("hid.dll")]
         static internal extern int HidP_GetValueCaps(short reportType, ref byte valueCaps, ref short valueCapsLength, IntPtr preparsedData);
 
-#if WIN64
-        [DllImport("hid.dll")]
-        static internal extern bool HidD_GetSerialNumberString(IntPtr HidDeviceObject, byte[] Buffer, ulong BufferLength);
-#else
-        [DllImport("hid.dll")]
-        static internal extern bool HidD_GetSerialNumberString(IntPtr HidDeviceObject, byte[] Buffer, uint BufferLength);
-#endif
+        // BufferLength is a ULONG (always 32 bits on Windows)
+        [DllImport("hid.dll", SetLastError = true)]
+        static internal extern bool HidD_GetSerialNumberString(SafeFileHandle HidDeviceObject, byte[] Buffer, uint BufferLength);
     }
 }

@@ -1081,14 +1081,22 @@ Suspend support not enabled.", true);
                         if (Type == DBT_DEVICEARRIVAL ||
                             Type == DBT_DEVICEREMOVECOMPLETE)
                         {
+                            bool startHotplugTask = false;
                             lock (hotplugCounterLock)
                             {
                                 hotplugCounter++;
+                                // Check and set under the same lock as the worker
+                                // exit check. Otherwise an event arriving while the
+                                // worker is finishing could be lost
+                                if (!inHotPlug)
+                                {
+                                    inHotPlug = true;
+                                    startHotplugTask = true;
+                                }
                             }
 
-                            if (!inHotPlug)
+                            if (startHotplugTask)
                             {
-                                inHotPlug = true;
                                 Task hotplugTask = Task.Run(() => { InnerHotplug2(); });
                                 // Log exceptions that might occur
                                 Util.LogAssistBackgroundTask(hotplugTask);
@@ -1324,30 +1332,48 @@ Suspend support not enabled.", true);
 
         private void InnerHotplug2()
         {
-            inHotPlug = true;
-
-            bool loopHotplug = false;
-
-            lock (hotplugCounterLock)
+            bool flagReleased = false;
+            try
             {
-                loopHotplug = hotplugCounter > 0;
-                hotplugCounter = 0;
-            }
-
-            Program.rootHub.UpdateHidHiddenAttributes();
-            while (loopHotplug == true)
-            {
-                Thread.Sleep(HOTPLUG_CHECK_DELAY);
-                Program.rootHub.HotPlug();
-
-                lock (hotplugCounterLock)
+                Program.rootHub.UpdateHidHiddenAttributes();
+                while (true)
                 {
-                    loopHotplug = hotplugCounter > 0;
-                    hotplugCounter = 0;
+                    lock (hotplugCounterLock)
+                    {
+                        // Release the busy flag under the lock used by WndProc so a
+                        // device change arriving right now starts a new worker
+                        if (hotplugCounter == 0)
+                        {
+                            inHotPlug = false;
+                            flagReleased = true;
+                            return;
+                        }
+
+                        hotplugCounter = 0;
+                    }
+
+                    Thread.Sleep(HOTPLUG_CHECK_DELAY);
+                    try
+                    {
+                        Program.rootHub.HotPlug();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Keep handling later device changes
+                        AppLogger.LogToGui($"Hotplug error: {ex.Message}", true);
+                    }
                 }
             }
-
-            inHotPlug = false;
+            finally
+            {
+                if (!flagReleased)
+                {
+                    lock (hotplugCounterLock)
+                    {
+                        inHotPlug = false;
+                    }
+                }
+            }
         }
 
         private void HookWindowMessages(HwndSource source)

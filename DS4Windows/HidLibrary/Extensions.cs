@@ -7,13 +7,15 @@ namespace DS4Windows
         public static string ToUTF8String(this byte[] buffer)
         {
             var value = Encoding.UTF8.GetString(buffer);
-            return value.Remove(value.IndexOf((char)0));
+            int end = value.IndexOf((char)0);
+            return end >= 0 ? value.Remove(end) : value;
         }
 
         public static string ToUTF16String(this byte[] buffer)
         {
             var value = Encoding.Unicode.GetString(buffer);
-            return value.Remove(value.IndexOf((char)0));
+            int end = value.IndexOf((char)0);
+            return end >= 0 ? value.Remove(end) : value;
         }
     }
 }

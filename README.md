@@ -67,7 +67,7 @@ Alternatively, you can download [`ds4w.bat`](https://raw.githubusercontent.com/s
 ## Requirements
 
 - Windows 10 or newer (Thanks Microsoft)
-- Microsoft .NET 8.0 Desktop Runtime. [x64](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0.0-windows-x64-installer) or [x86](https://dotnet.microsoft.com/en-us/download/dotnet/thank-you/runtime-desktop-8.0.0-windows-x86-installer)
+- Microsoft .NET 10.0 Desktop Runtime. [Download (x64 or x86)](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 - Visual C++ 2015-2022 Redistributable. [x64](https://aka.ms/vs/17/release/vc_redist.x64.exe) or [x86](https://aka.ms/vs/17/release/vc_redist.x86.exe)
 - [ViGEmBus](https://vigem.org/) driver (DS4Windows will install it for you)
 - **Sony** DualShock 4 or other supported controller

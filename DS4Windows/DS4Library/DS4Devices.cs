@@ -270,134 +270,180 @@ namespace DS4Windows
                 //foreach (HidDevice hDevice in hDevices)
                 {
                     HidDevice hDevice = tempList[i];
-                    VidPidInfo metainfo = knownDevices.Single(x => x.vid == hDevice.Attributes.VendorId &&
-                        x.pid == hDevice.Attributes.ProductId);
-
-                    if (!metainfo.featureSet.HasFlag(VidPidFeatureSet.VendorDefinedDevice) &&
-                        hDevice.Capabilities.UsagePage >= 0xFF00)
-                        continue; // Ignore devices using Vendor-Defined HID Usage Pages (expected to ignore the Nacon Revolution Pro programming interface)
-                    else if (DevicePaths.Contains(hDevice.DevicePath))
-                        continue; // BT/USB endpoint already open once
-
-                    if (!hDevice.IsOpen)
+                    try
                     {
-                        hDevice.OpenDevice(isExclusiveMode);
-                        if (!hDevice.IsOpen && isExclusiveMode)
+                        if (!TryOpenAndAddDevice(hDevice))
                         {
-                            try
-                            {
-                                // Check if running with elevated permissions
-                                WindowsIdentity identity = WindowsIdentity.GetCurrent();
-                                WindowsPrincipal principal = new WindowsPrincipal(identity);
-                                bool elevated = principal.IsInRole(WindowsBuiltInRole.Administrator);
-
-                                if (!elevated)
-                                {
-                                    // Tell the client to launch routine to re-enable a device
-                                    RequestElevationArgs eleArgs =
-                                        new RequestElevationArgs(Global.GetInstanceIdFromDevicePath(hDevice.DevicePath));
-                                    RequestElevation?.Invoke(eleArgs);
-                                    if (eleArgs.StatusCode == RequestElevationArgs.STATUS_SUCCESS)
-                                    {
-                                        hDevice.OpenDevice(isExclusiveMode);
-                                    }
-                                }
-                                else
-                                {
-                                    reEnableDevice(Global.GetInstanceIdFromDevicePath(hDevice.DevicePath));
-                                    hDevice.OpenDevice(isExclusiveMode);
-                                }
-                            }
-                            catch (Exception) { }
+                            ReleaseUnusedDevice(hDevice);
                         }
-                        
-                        // TODO in exclusive mode, try to hold both open when both are connected
-                        if (isExclusiveMode && !hDevice.IsOpen)
-                            hDevice.OpenDevice(false);
                     }
-
-                    if (hDevice.IsOpen)
+                    catch (Exception ex)
                     {
-                        //string serial = hDevice.ReadSerial();
-                        string serial = DS4Device.BLANK_SERIAL;
-                        if (metainfo.inputDevType == InputDeviceType.DualSense)
-                        {
-                            serial = hDevice.ReadSerial(DualSenseDevice.SERIAL_FEATURE_ID);
-                        }
-                        else if (metainfo.inputDevType == InputDeviceType.DS4 &&
-                            metainfo.checkConnection(hDevice) == ConnectionType.SONYWA ||
-                            metainfo.inputDevType == InputDeviceType.DS3)
-                        {
-                            serial = hDevice.GenerateFakeHwSerial();
-                        }
-                        else if (metainfo.inputDevType == InputDeviceType.JoyConGrip)
-                        {
-                            // Blank serial will mean that a JoyCon is not docked to a side
-                            serial = JoyConDevice.ReadUSBSerial(hDevice);
-                        }
-                        else
-                        {
-                            serial = hDevice.ReadSerial(DS4Device.SERIAL_FEATURE_ID);
-                        }
-
-                        bool validSerial = !serial.Equals(DS4Device.BLANK_SERIAL);
-                        bool newdev = true;
-                        if (validSerial && deviceSerials.Contains(serial))
-                        {
-                            // Check if Quick Charge flag is engaged
-                            if (serialDevices.TryGetValue(serial, out DS4Device tempDev) && tempDev.ReadyQuickChargeDisconnect)
-                            {
-                                // Need to disconnect callback here to avoid deadlock
-                                tempDev.Removal -= On_Removal;
-                                // Call inner removal process here instead
-                                InnerRemoveDevice(tempDev);
-                                // Disconnect wireless device
-                                tempDev.DisconnectWireless();
-                            }
-                            // happens when the BT endpoint already is open and the USB is plugged into the same host
-                            else if (isExclusiveMode && hDevice.IsExclusive &&
-                                !DisabledDevices.Contains(hDevice))
-                            {
-                                // Grab reference to exclusively opened HidDevice so device
-                                // stays hidden to other processes
-                                DisabledDevices.Add(hDevice);
-                                //DevicePaths.Add(hDevice.DevicePath);
-                                newdev = false;
-                            }
-                            else
-                            {
-                                // Using shared mode. Serial already exists. Ignore device
-                                newdev = false;
-                            }
-                        }
-
-                        if (newdev && validSerial)
-                        {
-                            DS4Device ds4Device = InputDeviceFactory.CreateDevice(metainfo.inputDevType, hDevice, metainfo.name, metainfo.featureSet);
-                            //DS4Device ds4Device = new DS4Device(hDevice, metainfo.name, metainfo.featureSet);
-                            if (ds4Device == null)
-                            {
-                                // No compatible device type was found. Skip
-                                continue;
-                            }
-
-                            PrepareDS4Init?.Invoke(ds4Device);
-                            ds4Device.PostInit();
-                            //Thread.Sleep(100);
-                            PostDS4Init?.Invoke(ds4Device);
-                            //ds4Device.Removal += On_Removal;
-                            if (!ds4Device.ExitOutputThread)
-                            {
-                                Devices.Add(hDevice.DevicePath, ds4Device);
-                                DevicePaths.Add(hDevice.DevicePath);
-                                deviceSerials.Add(serial);
-                                serialDevices.Add(serial, ds4Device);
-                                AppLogger.LogToGui($"{DS4WinWPF.Properties.Resources.FoundController} {ds4Device.getMacAddress()} ({ds4Device.getConnectionType()}) ({ds4Device.DisplayName}).",false);
-                            }
-                        }
+                        AppLogger.LogToGui($"Failed to initialize HID device {hDevice.DevicePath}: {ex.Message}", true);
+                        ReleaseUnusedDevice(hDevice);
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Close the handle of a device that was opened during a scan but not
+        /// kept. Avoids leaking one handle per hotplug event (and keeping an
+        /// exclusive lock on a device nobody uses)
+        /// </summary>
+        private static void ReleaseUnusedDevice(HidDevice hDevice)
+        {
+            if (hDevice.IsOpen && !DisabledDevices.Contains(hDevice) &&
+                !Devices.ContainsKey(hDevice.DevicePath))
+            {
+                try
+                {
+                    hDevice.CloseDevice();
+                }
+                catch { }
+            }
+        }
+
+        /// <summary>
+        /// Open a HID device and register a new DS4Device instance for it
+        /// </summary>
+        /// <returns>True if the device is now in use (active or held in exclusive mode)</returns>
+        private static bool TryOpenAndAddDevice(HidDevice hDevice)
+        {
+            VidPidInfo metainfo = knownDevices.Single(x => x.vid == hDevice.Attributes.VendorId &&
+                x.pid == hDevice.Attributes.ProductId);
+
+            if (!metainfo.featureSet.HasFlag(VidPidFeatureSet.VendorDefinedDevice) &&
+                hDevice.Capabilities.UsagePage >= 0xFF00)
+                return false; // Ignore devices using Vendor-Defined HID Usage Pages (expected to ignore the Nacon Revolution Pro programming interface)
+            else if (DevicePaths.Contains(hDevice.DevicePath))
+                return true; // BT/USB endpoint already open once
+
+            if (!hDevice.IsOpen)
+            {
+                hDevice.OpenDevice(isExclusiveMode);
+                if (!hDevice.IsOpen && isExclusiveMode)
+                {
+                    try
+                    {
+                        // Check if running with elevated permissions
+                        WindowsIdentity identity = WindowsIdentity.GetCurrent();
+                        WindowsPrincipal principal = new WindowsPrincipal(identity);
+                        bool elevated = principal.IsInRole(WindowsBuiltInRole.Administrator);
+
+                        if (!elevated)
+                        {
+                            // Tell the client to launch routine to re-enable a device
+                            RequestElevationArgs eleArgs =
+                                new RequestElevationArgs(Global.GetInstanceIdFromDevicePath(hDevice.DevicePath));
+                            RequestElevation?.Invoke(eleArgs);
+                            if (eleArgs.StatusCode == RequestElevationArgs.STATUS_SUCCESS)
+                            {
+                                hDevice.OpenDevice(isExclusiveMode);
+                            }
+                        }
+                        else
+                        {
+                            reEnableDevice(Global.GetInstanceIdFromDevicePath(hDevice.DevicePath));
+                            hDevice.OpenDevice(isExclusiveMode);
+                        }
+                    }
+                    catch (Exception) { }
+                }
+                
+                // TODO in exclusive mode, try to hold both open when both are connected
+                if (isExclusiveMode && !hDevice.IsOpen)
+                    hDevice.OpenDevice(false);
+            }
+
+            if (hDevice.IsOpen)
+            {
+                //string serial = hDevice.ReadSerial();
+                string serial = DS4Device.BLANK_SERIAL;
+                if (metainfo.inputDevType == InputDeviceType.DualSense)
+                {
+                    serial = hDevice.ReadSerial(DualSenseDevice.SERIAL_FEATURE_ID);
+                }
+                else if (metainfo.inputDevType == InputDeviceType.DS4 &&
+                    metainfo.checkConnection(hDevice) == ConnectionType.SONYWA ||
+                    metainfo.inputDevType == InputDeviceType.DS3)
+                {
+                    serial = hDevice.GenerateFakeHwSerial();
+                }
+                else if (metainfo.inputDevType == InputDeviceType.JoyConGrip)
+                {
+                    // Blank serial will mean that a JoyCon is not docked to a side
+                    serial = JoyConDevice.ReadUSBSerial(hDevice);
+                }
+                else
+                {
+                    serial = hDevice.ReadSerial(DS4Device.SERIAL_FEATURE_ID);
+                }
+
+                bool validSerial = !serial.Equals(DS4Device.BLANK_SERIAL);
+                bool newdev = true;
+                if (validSerial && deviceSerials.Contains(serial))
+                {
+                    // Check if Quick Charge flag is engaged
+                    if (serialDevices.TryGetValue(serial, out DS4Device tempDev) && tempDev.ReadyQuickChargeDisconnect)
+                    {
+                        // Need to disconnect callback here to avoid deadlock
+                        tempDev.Removal -= On_Removal;
+                        // Call inner removal process here instead
+                        InnerRemoveDevice(tempDev);
+                        // Disconnect wireless device
+                        tempDev.DisconnectWireless();
+                    }
+                    // happens when the BT endpoint already is open and the USB is plugged into the same host
+                    else if (isExclusiveMode && hDevice.IsExclusive &&
+                        !DisabledDevices.Contains(hDevice))
+                    {
+                        // Grab reference to exclusively opened HidDevice so device
+                        // stays hidden to other processes
+                        DisabledDevices.Add(hDevice);
+                        //DevicePaths.Add(hDevice.DevicePath);
+                        newdev = false;
+                    }
+                    else
+                    {
+                        // Using shared mode. Serial already exists. Ignore device
+                        newdev = false;
+                    }
+                }
+
+                if (newdev && validSerial)
+                {
+                    DS4Device ds4Device = InputDeviceFactory.CreateDevice(metainfo.inputDevType, hDevice, metainfo.name, metainfo.featureSet);
+                    //DS4Device ds4Device = new DS4Device(hDevice, metainfo.name, metainfo.featureSet);
+                    if (ds4Device == null)
+                    {
+                        // No compatible device type was found. Skip
+                        return false;
+                    }
+
+                    PrepareDS4Init?.Invoke(ds4Device);
+                    ds4Device.PostInit();
+                    //Thread.Sleep(100);
+                    PostDS4Init?.Invoke(ds4Device);
+                    //ds4Device.Removal += On_Removal;
+                    if (!ds4Device.ExitOutputThread)
+                    {
+                        Devices.Add(hDevice.DevicePath, ds4Device);
+                        DevicePaths.Add(hDevice.DevicePath);
+                        deviceSerials.Add(serial);
+                        serialDevices.Add(serial, ds4Device);
+                        AppLogger.LogToGui($"{DS4WinWPF.Properties.Resources.FoundController} {ds4Device.getMacAddress()} ({ds4Device.getConnectionType()}) ({ds4Device.DisplayName}).",false);
+                        return true;
+                    }
+                    else
+                    {
+                        // Initialization failed. Make sure no worker thread is left behind
+                        ds4Device.StopUpdate();
+                    }
+                }
+            }
+
+            return DisabledDevices.Contains(hDevice);
         }
         
         // Returns DS4 controllers that were found and are running
@@ -425,6 +471,15 @@ namespace DS4Windows
                     device.StopUpdate();
                     //device.runRemoval();
                     device.HidDevice.CloseDevice();
+                }
+
+                foreach (HidDevice disabledDev in DisabledDevices)
+                {
+                    try
+                    {
+                        disabledDev.CloseDevice();
+                    }
+                    catch { }
                 }
 
                 Devices.Clear();
@@ -538,73 +593,83 @@ namespace DS4Windows
             Guid hidGuid = new Guid();
             NativeMethods.HidD_GetHidGuid(ref hidGuid);
             IntPtr deviceInfoSet = NativeMethods.SetupDiGetClassDevs(ref hidGuid, deviceInstanceId, 0, NativeMethods.DIGCF_PRESENT | NativeMethods.DIGCF_DEVICEINTERFACE);
-            NativeMethods.SP_DEVINFO_DATA deviceInfoData = new NativeMethods.SP_DEVINFO_DATA();
-            deviceInfoData.cbSize = Marshal.SizeOf(deviceInfoData);
-            success = NativeMethods.SetupDiEnumDeviceInfo(deviceInfoSet, 0, ref deviceInfoData);
-            if (!success)
+            if (deviceInfoSet.ToInt64() == NativeMethods.INVALID_HANDLE_VALUE)
             {
-                throw new Exception("Error getting device info data, error code = " + Marshal.GetLastWin32Error());
-            }
-            success = NativeMethods.SetupDiEnumDeviceInfo(deviceInfoSet, 1, ref deviceInfoData); // Checks that we have a unique device
-            if (success)
-            {
-                throw new Exception("Can't find unique device");
+                throw new Exception("Error getting device info set, error code = " + Marshal.GetLastWin32Error());
             }
 
-            NativeMethods.SP_PROPCHANGE_PARAMS propChangeParams = new NativeMethods.SP_PROPCHANGE_PARAMS();
-            propChangeParams.classInstallHeader.cbSize = Marshal.SizeOf(propChangeParams.classInstallHeader);
-            propChangeParams.classInstallHeader.installFunction = NativeMethods.DIF_PROPERTYCHANGE;
-            propChangeParams.stateChange = NativeMethods.DICS_DISABLE;
-            propChangeParams.scope = NativeMethods.DICS_FLAG_GLOBAL;
-            propChangeParams.hwProfile = 0;
-            success = NativeMethods.SetupDiSetClassInstallParams(deviceInfoSet, ref deviceInfoData, ref propChangeParams, Marshal.SizeOf(propChangeParams));
-            if (!success)
+            try
             {
-                throw new Exception("Error setting class install params, error code = " + Marshal.GetLastWin32Error());
-            }
-            success = NativeMethods.SetupDiCallClassInstaller(NativeMethods.DIF_PROPERTYCHANGE, deviceInfoSet, ref deviceInfoData);
-            // TEST: If previous SetupDiCallClassInstaller fails, just continue
-            // otherwise device will likely get permanently disabled.
-            /*if (!success)
-            {
-                throw new Exception("Error disabling device, error code = " + Marshal.GetLastWin32Error());
-            }
-            */
+                NativeMethods.SP_DEVINFO_DATA deviceInfoData = new NativeMethods.SP_DEVINFO_DATA();
+                deviceInfoData.cbSize = Marshal.SizeOf(deviceInfoData);
+                success = NativeMethods.SetupDiEnumDeviceInfo(deviceInfoSet, 0, ref deviceInfoData);
+                if (!success)
+                {
+                    throw new Exception("Error getting device info data, error code = " + Marshal.GetLastWin32Error());
+                }
+                success = NativeMethods.SetupDiEnumDeviceInfo(deviceInfoSet, 1, ref deviceInfoData); // Checks that we have a unique device
+                if (success)
+                {
+                    throw new Exception("Can't find unique device");
+                }
 
-            //System.Threading.Thread.Sleep(50);
-            sw.Restart();
-            while (sw.ElapsedMilliseconds < 500)
-            {
-                // Use SpinWait to keep control of current thread. Using Sleep could potentially
-                // cause other events to get run out of order
-                System.Threading.Thread.SpinWait(250);
-            }
-            sw.Stop();
+                NativeMethods.SP_PROPCHANGE_PARAMS propChangeParams = new NativeMethods.SP_PROPCHANGE_PARAMS();
+                propChangeParams.classInstallHeader.cbSize = Marshal.SizeOf(propChangeParams.classInstallHeader);
+                propChangeParams.classInstallHeader.installFunction = NativeMethods.DIF_PROPERTYCHANGE;
+                propChangeParams.stateChange = NativeMethods.DICS_DISABLE;
+                propChangeParams.scope = NativeMethods.DICS_FLAG_GLOBAL;
+                propChangeParams.hwProfile = 0;
+                success = NativeMethods.SetupDiSetClassInstallParams(deviceInfoSet, ref deviceInfoData, ref propChangeParams, Marshal.SizeOf(propChangeParams));
+                if (!success)
+                {
+                    throw new Exception("Error setting class install params, error code = " + Marshal.GetLastWin32Error());
+                }
+                success = NativeMethods.SetupDiCallClassInstaller(NativeMethods.DIF_PROPERTYCHANGE, deviceInfoSet, ref deviceInfoData);
+                // TEST: If previous SetupDiCallClassInstaller fails, just continue
+                // otherwise device will likely get permanently disabled.
+                /*if (!success)
+                {
+                    throw new Exception("Error disabling device, error code = " + Marshal.GetLastWin32Error());
+                }
+                */
 
-            propChangeParams.stateChange = NativeMethods.DICS_ENABLE;
-            success = NativeMethods.SetupDiSetClassInstallParams(deviceInfoSet, ref deviceInfoData, ref propChangeParams, Marshal.SizeOf(propChangeParams));
-            if (!success)
-            {
-                throw new Exception("Error setting class install params, error code = " + Marshal.GetLastWin32Error());
-            }
-            success = NativeMethods.SetupDiCallClassInstaller(NativeMethods.DIF_PROPERTYCHANGE, deviceInfoSet, ref deviceInfoData);
-            if (!success)
-            {
-                throw new Exception("Error enabling device, error code = " + Marshal.GetLastWin32Error());
-            }
+                //System.Threading.Thread.Sleep(50);
+                sw.Restart();
+                while (sw.ElapsedMilliseconds < 500)
+                {
+                    // Use SpinWait to keep control of current thread. Using Sleep could potentially
+                    // cause other events to get run out of order
+                    System.Threading.Thread.SpinWait(250);
+                }
+                sw.Stop();
 
-            //System.Threading.Thread.Sleep(50);
-            /*sw.Restart();
-            while (sw.ElapsedMilliseconds < 50)
-            {
-                // Use SpinWait to keep control of current thread. Using Sleep could potentially
-                // cause other events to get run out of order
-                System.Threading.Thread.SpinWait(100);
-            }
-            sw.Stop();
-            */
+                propChangeParams.stateChange = NativeMethods.DICS_ENABLE;
+                success = NativeMethods.SetupDiSetClassInstallParams(deviceInfoSet, ref deviceInfoData, ref propChangeParams, Marshal.SizeOf(propChangeParams));
+                if (!success)
+                {
+                    throw new Exception("Error setting class install params, error code = " + Marshal.GetLastWin32Error());
+                }
+                success = NativeMethods.SetupDiCallClassInstaller(NativeMethods.DIF_PROPERTYCHANGE, deviceInfoSet, ref deviceInfoData);
+                if (!success)
+                {
+                    throw new Exception("Error enabling device, error code = " + Marshal.GetLastWin32Error());
+                }
 
-            NativeMethods.SetupDiDestroyDeviceInfoList(deviceInfoSet);
+                //System.Threading.Thread.Sleep(50);
+                /*sw.Restart();
+                while (sw.ElapsedMilliseconds < 50)
+                {
+                    // Use SpinWait to keep control of current thread. Using Sleep could potentially
+                    // cause other events to get run out of order
+                    System.Threading.Thread.SpinWait(100);
+                }
+                sw.Stop();
+                */
+            }
+            finally
+            {
+                NativeMethods.SetupDiDestroyDeviceInfoList(deviceInfoSet);
+            }
         }
     }
 }

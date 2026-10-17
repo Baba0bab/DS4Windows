@@ -1960,7 +1960,7 @@ namespace DS4Windows
 
         public static void DebouncingMsHasChanged()
         {
-            DebouncingMsChanged.Invoke(typeof(Global), EventArgs.Empty);
+            DebouncingMsChanged?.Invoke(typeof(Global), EventArgs.Empty);
         }
 
         public static event EventHandler DebouncingMsChanged;

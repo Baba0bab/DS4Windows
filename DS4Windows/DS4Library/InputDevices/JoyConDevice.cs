@@ -397,9 +397,16 @@ namespace DS4Windows.InputDevices
             //Thread.Sleep(1000);
 
             byte[] cmdBuffer = new byte[64];
+            long deadline = Environment.TickCount64 + USB_RESPONSE_TIMEOUT_MS;
             HidDevice.ReadStatus res = hDevice.ReadFile(cmdBuffer, 100);
             while (!(cmdBuffer[0] == 0x81 && cmdBuffer[1] == 0x01))
             {
+                if (!KeepWaitingForResponse(res, deadline))
+                {
+                    // Device unplugged or not answering. Try again on next hotplug event
+                    return serial;
+                }
+
                 if (cmdBuffer[0] != 0x81)
                 {
                     result = hDevice.WriteOutputReportViaInterrupt(data, 0);
@@ -449,9 +456,15 @@ namespace DS4Windows.InputDevices
             //Thread.Sleep(1000);
 
             byte[] cmdBuffer = new byte[64];
+            long deadline = Environment.TickCount64 + USB_RESPONSE_TIMEOUT_MS;
             HidDevice.ReadStatus res = hDevice.ReadFile(cmdBuffer, 100);
             while (!(cmdBuffer[0] == 0x81 && cmdBuffer[1] == 0x01 && cmdBuffer[3] != 0x00))
             {
+                if (!KeepWaitingForResponse(res, deadline))
+                {
+                    throw new InvalidOperationException("JoyCon did not answer the USB status request");
+                }
+
                 if (cmdBuffer[0] != 0x81)
                 {
                     result = hDevice.WriteOutputReportViaInterrupt(data, 0);
@@ -540,9 +553,15 @@ namespace DS4Windows.InputDevices
             //return;
 
             byte[] cmdBuffer = new byte[64];
+            long deadline = Environment.TickCount64 + USB_RESPONSE_TIMEOUT_MS;
             HidDevice.ReadStatus res = hDevice.ReadFile(cmdBuffer, 100);
             while (!(cmdBuffer[0] == 0x81 && cmdBuffer[1] == 0x03))
             {
+                if (!KeepWaitingForResponse(res, deadline))
+                {
+                    throw new InvalidOperationException("JoyCon did not answer the USB baud rate change");
+                }
+
                 result = hDevice.WriteOutputReportViaInterrupt(data, 0);
                 //Thread.Sleep(20);
 
@@ -554,12 +573,29 @@ namespace DS4Windows.InputDevices
             //Trace.WriteLine($"{cmdBuffer[0]} | {cmdBuffer[1]}");
         }
 
+        // Upper bound when waiting for a USB (0x80 command) answer. Previously these
+        // loops never ended if the JoyCon got unplugged during initialization,
+        // blocking device detection for the whole application
+        private const int USB_RESPONSE_TIMEOUT_MS = 3000;
+
+        private static bool KeepWaitingForResponse(HidDevice.ReadStatus res, long deadline)
+        {
+            return (res == HidDevice.ReadStatus.Success || res == HidDevice.ReadStatus.WaitTimedOut) &&
+                Environment.TickCount64 < deadline;
+        }
+
         private void WaitForReportResponse(byte reportId, byte command, byte[] commandBuf, bool repeatPacket = true)
         {
             byte[] cmdBuffer = new byte[64];
+            long deadline = Environment.TickCount64 + USB_RESPONSE_TIMEOUT_MS;
             HidDevice.ReadStatus res = hDevice.ReadFile(cmdBuffer, 100);
             while (!(cmdBuffer[0] == reportId && cmdBuffer[1] == command))
             {
+                if (!KeepWaitingForResponse(res, deadline))
+                {
+                    throw new InvalidOperationException($"JoyCon did not answer USB command 0x{command:X2}");
+                }
+
                 if (repeatPacket)
                 {
                     bool result = hDevice.WriteOutputReportViaInterrupt(commandBuf, 100);
@@ -644,7 +680,7 @@ namespace DS4Windows.InputDevices
             {
                 Debouncer = SetupDebouncer();
                 firstActive = DateTime.UtcNow;
-                NativeMethods.HidD_SetNumInputBuffers(hDevice.SafeReadHandle.DangerousGetHandle(), 3);
+                hDevice.SetNumInputBuffers(3);
                 Queue<long> latencyQueue = new Queue<long>(21); // Set capacity at max + 1 to avoid any resizing
                 int tempLatencyCount = 0;
                 long oldtime = 0;
@@ -1276,8 +1312,10 @@ namespace DS4Windows.InputDevices
                     HidDevice.ReadStatus res;
                     res = hDevice.ReadFile(tmpReport, SUBCOMMAND_RESPONSE_TIMEOUT);
                     int tries = 1;
+                    // Wait for the 0x21 reply that matches this subcommand. Regular
+                    // 0x30 input reports can arrive in between
                     while (res == HidDevice.ReadStatus.Success &&
-                        tmpReport[0] != 0x21 && tmpReport[14] != subcommand && tries < 100)
+                        (tmpReport[0] != 0x21 || tmpReport[14] != subcommand) && tries < 100)
                     {
                         //Console.WriteLine("TRY AGAIN: {0}", tmpReport[0]);
                         res = hDevice.ReadFile(tmpReport, SUBCOMMAND_RESPONSE_TIMEOUT);
@@ -1303,6 +1341,12 @@ namespace DS4Windows.InputDevices
                 tmpBuffer.SequenceEqual<byte>([0x1D, 0x80, 0x00, 0x00, 0x09]))   // RIGHT STICK USER    CALIB
             {
                 var SPI_RESP_OFFSET = 20;
+                if (tmpReport.Length < SPI_RESP_OFFSET + 9)
+                {
+                    // No reply received (write failure or no response requested). Retry
+                    return true;
+                }
+
                 var stickCalib = new ushort[6];
                 stickCalib[0] = (ushort)(((tmpReport[1 + SPI_RESP_OFFSET] << 8) & 0xF00) | tmpReport[0 + SPI_RESP_OFFSET]); // X Axis Max above center
                 stickCalib[1] = (ushort)((tmpReport[2 + SPI_RESP_OFFSET] << 4) | (tmpReport[1 + SPI_RESP_OFFSET] >> 4)); // Y Axis Max above center
