@@ -11,6 +11,7 @@ First release of the Baba0bab fork, based on DS4Windows 3.9.9 by schmaldeo.
 * The native title bar now follows the selected theme
 * Start/Stop and Save use the accent button style
 * Profile editor now shows the rainbow lightbar state when a profile is loaded
+* Controller Readings refreshes on the UI thread and never waits on the input thread, so a busy interface can no longer stack up refreshes or stall a thread. It only redraws when a new report arrived (about 3x less CPU with the panel open)
 
 **Controller connection (HID)**
 * Fixed device handles never being closed, which leaked handles and could leave a controller locked in exclusive mode after a disconnect

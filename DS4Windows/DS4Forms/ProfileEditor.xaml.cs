@@ -1686,6 +1686,12 @@ namespace DS4WinWPF.DS4Forms
 
         private void SidebarTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // SelectionChanged bubbles up from lists and combo boxes inside the tabs
+            if (e.OriginalSource != sidebarTabControl)
+            {
+                return;
+            }
+
             if (sidebarTabControl.SelectedItem == contReadingsTab)
             {
                 controllerReadingsTabActive = true;
