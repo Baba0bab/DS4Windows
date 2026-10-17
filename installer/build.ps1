@@ -54,9 +54,20 @@ Copy-Item (Join-Path $publishDir '*') (Join-Path $staging 'DS4Windows') -Recurse
 Copy-Item (Join-Path $root 'LICENSE.txt'), (Join-Path $root 'NOTICE.txt') (Join-Path $staging 'DS4Windows')
 $zip = Join-Path $outputDir "DS4Windows_${version}_x64${suffix}.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
-# Pas Compress-Archive : sous Windows PowerShell il écrit des « \ » dans les chemins du zip
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $staging 'DS4Windows'), $zip, 'Optimal', $true)
+# Entrées écrites une par une : sous Windows PowerShell, Compress-Archive et
+# CreateFromDirectory mettent des « \ » dans les chemins, hors norme zip
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+$stagingFull = (Get-Item $staging).FullName
+$archive = [IO.Compression.ZipFile]::Open($zip, 'Create')
+try {
+    Get-ChildItem $stagingFull -Recurse -File | ForEach-Object {
+        $entry = $_.FullName.Substring($stagingFull.Length).TrimStart('\').Replace('\', '/')
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $_.FullName, $entry, 'Optimal') | Out-Null
+    }
+}
+finally {
+    $archive.Dispose()
+}
 Remove-Item $staging -Recurse -Force
 
 Write-Host "== Empreintes SHA-256 ==" -ForegroundColor Cyan
