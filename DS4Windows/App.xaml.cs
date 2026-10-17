@@ -67,6 +67,8 @@ namespace DS4WinWPF
         private Thread testThread;
         private bool exitComThread = false;
         private const string SingleAppComEventName = "{a52b5b20-d9ee-4f32-8518-307fa14aa0c6}";
+        // Marker file dropped next to the exe by the installer
+        private const string InstalledMarkerFileName = "DS4Windows.installed";
         private EventWaitHandle threadComEvent = null;
         private Timer collectTimer;
         private static LoggerHolder logHolder;
@@ -154,8 +156,15 @@ namespace DS4WinWPF
 
             // Could not find unique profile location; does not exist or multiple places.
             // Advise user to specify where DS4Windows should save its configuation files
-            // and profiles
-            if (firstRun)
+            // and profiles. An installed copy always uses AppData so its settings
+            // survive upgrades and uninstalls
+            if (firstRun && !DS4Windows.Global.multisavespots &&
+                File.Exists(Path.Combine(DS4Windows.Global.exedirpath, InstalledMarkerFileName)))
+            {
+                DS4Windows.Global.SaveDefault(Path.Combine(DS4Windows.Global.appDataPpath, "Profiles.xml"));
+                DS4Windows.Global.SaveWhere(DS4Windows.Global.appDataPpath);
+            }
+            else if (firstRun)
             {
                 DS4Forms.SaveWhere savewh =
                     new DS4Forms.SaveWhere(DS4Windows.Global.multisavespots);

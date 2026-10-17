@@ -49,6 +49,44 @@ dotnet publish DS4Windows/DS4WinWPF.csproj -c Release -r win-x64 --self-containe
 
 ---
 
+## 2 bis. Fabriquer un vrai installeur (`Setup.exe`)
+
+Alternative au dossier copié à la main : un installeur classique avec désinstallation,
+raccourci menu Démarrer et entrée dans « Applications installées ».
+
+Prérequis (une seule fois) : **Inno Setup 6**.
+```bash
+winget install --id JRSoftware.InnoSetup -e --source winget --scope user
+```
+
+Puis, à chaque nouvelle version :
+```bash
+powershell -ExecutionPolicy Bypass -File installer\build.ps1
+```
+
+- Résultat : `installer\Output\DS4Windows_<version>_x64_Setup.exe` (~5 Mo). La version
+  est lue dans `DS4Windows\DS4WinWPF.csproj` (`<Version>`).
+- Variante qui embarque .NET (pour un PC sans .NET 10) : ajouter `-SelfContained`.
+- `installer\publish\` et `installer\Output\` sont ignorés par Git.
+- Le script de l'installeur est `installer\DS4Windows.iss`. Ne **jamais** changer son `AppId` :
+  c'est lui qui permet d'installer une nouvelle version par-dessus l'ancienne.
+
+Ce que fait l'installeur :
+- Installe par défaut pour l'utilisateur courant, sans droits admin
+  (`%LOCALAPPDATA%\Programs\DS4Windows`), ou pour tous dans `Program Files` au choix.
+- Ferme proprement DS4Windows s'il tourne (via `DS4Windows.exe -command shutdown`).
+- Prévient si le .NET 10 Desktop Runtime manque, et propose d'installer les pilotes si ViGEmBus est absent.
+- Si « Lancer au démarrage » était activé, redirige ce raccourci vers la copie installée.
+- Pose un fichier `DS4Windows.installed` à côté de l'exe : une copie installée range toujours
+  ses réglages dans `%APPDATA%\DS4Windows`, sans poser la question au premier lancement.
+- La désinstallation retire aussi le lancement au démarrage et demande si on veut supprimer
+  les profils (Non par défaut).
+
+> L'installeur n'est pas signé : Windows SmartScreen peut afficher « Windows a protégé
+> votre ordinateur » sur un autre PC → « Informations complémentaires » → « Exécuter quand même ».
+
+---
+
 ## 3. Première installation / passage depuis une autre version
 
 1. Fermer l'ancien DS4Windows (et le retirer du démarrage de Windows s'il y était).

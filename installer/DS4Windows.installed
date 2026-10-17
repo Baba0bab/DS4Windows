@@ -1,0 +1,3 @@
+﻿Ce fichier est posé par l'installeur. Tant qu'il est présent, DS4Windows range
+ses profils et réglages dans %APPDATA%\DS4Windows sans poser la question au
+premier lancement. Le supprimer rétablit le choix « dossier du programme / AppData ».
