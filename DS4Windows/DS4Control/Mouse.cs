@@ -146,8 +146,6 @@ namespace DS4Windows
         public void ResetToggleGyroModes()
         {
             currentToggleGyroControls = false;
-            currentToggleGyroMouse = false;
-            currentToggleGyroStick = false;
 
             previousTriggerActivated = false;
             triggeractivated = false;
@@ -214,8 +212,6 @@ namespace DS4Windows
         }
 
         bool currentToggleGyroControls = false;
-        bool currentToggleGyroMouse = false;
-        bool currentToggleGyroStick = false;
 
         bool previousUnchangedTouchJoyFrame = false;
         int previousTouchDX = 0;

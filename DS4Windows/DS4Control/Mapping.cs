@@ -814,7 +814,6 @@ namespace DS4Windows
             50, // DS4Controls.BLP
             51, // DS4Controls.BRP
         };
-        private static int macroEndIndex = DS4_CONTROL_MACRO_ARRAY_LEN - 1;
 
         // Special macros
         static bool altTabDone = true;
@@ -4228,7 +4227,7 @@ namespace DS4Windows
 
                                     AppLogger.LogToGui(prolog, false);
                                     if (Global.ProfileChangedNotification) AppLogger.LogToTray(prolog);
-                                    Task.Run(() =>
+                                    _ = Task.Run(() =>
                                     {
                                         d.HaltReportingRunAction(() =>
                                         {

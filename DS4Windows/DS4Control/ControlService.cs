@@ -77,7 +77,6 @@ namespace DS4Windows
             new OneEuroFilter3D(), new OneEuroFilter3D(),
         };
         Thread tempThread;
-        Thread tempBusThread;
         Thread eventDispatchThread;
         Dispatcher eventDispatcher;
         public bool suspending;
@@ -1141,7 +1140,7 @@ namespace DS4Windows
                         DS4OutputBufferData outputData =
                             DS4OutDeviceExtras.ConvertOutputBufferArrayToStruct(reportData);
 
-                        bool useRumble = false; bool useLight = false;
+                        bool useLight = false;
                         byte flashOn = 0; byte flashOff = 0;
                         DS4Color? color = null;
 
@@ -1149,7 +1148,6 @@ namespace DS4Windows
 
                         if ((outputData.featureFlags & DS4OutDevice.RUMBLE_FEATURE_FLAG) != 0)
                         {
-                            useRumble = true;
                             device.setRumble(outputData.rightFastRumble, outputData.leftSlowRumble);
                             //SetDevRumble(device, devour[4], devour[5], devIndex);
                         }
@@ -1200,12 +1198,11 @@ namespace DS4Windows
                             //Trace.WriteLine(string.Join(" ", reportData));
                             //Trace.WriteLine("");
 
-                            bool useRumble = false; bool useLight = false;
+                            bool useLight = false;
                             byte flashOn = 0; byte flashOff = 0;
                             DS4Color? color = null;
                             if ((reportData[1] & DS4OutDevice.RUMBLE_FEATURE_FLAG) != 0)
                             {
-                                useRumble = true;
                                 if (Global.InverseRumbleMotors[devIndex])
                                     device.setRumble(reportData[5], reportData[4]);
                                 else
