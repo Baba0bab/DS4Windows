@@ -84,6 +84,7 @@ namespace DS4Windows
 
         private UdpServer _udpServer;
         private OutputSlotManager outputslotMan;
+        private readonly ElevatedDeviceHelper elevatedDeviceHelper = new ElevatedDeviceHelper();
 
         private HashSet<string> hidDeviceHidingAffectedDevs = new HashSet<string>();
         private HashSet<string> hidDeviceHidingExemptedDevs = new HashSet<string>();
@@ -614,31 +615,15 @@ namespace DS4Windows
 
             eventDispatchThread.Join();
             eventDispatchThread = null;
+
+            elevatedDeviceHelper.Dispose();
         }
 
         private void DS4Devices_RequestElevation(RequestElevationArgs args)
         {
-            // Launches an elevated child process to re-enable device
-            ProcessStartInfo startInfo =
-                new ProcessStartInfo(Global.exelocation);
-            startInfo.Verb = "runas";
-            startInfo.Arguments = "re-enabledevice " + args.InstanceId;
-            startInfo.UseShellExecute = true;
-
-            try
-            {
-                Process child = Process.Start(startInfo);
-                if (!child.WaitForExit(30000))
-                {
-                    child.Kill();
-                }
-                else
-                {
-                    args.StatusCode = child.ExitCode;
-                }
-                child.Dispose();
-            }
-            catch { }
+            // Reuses a single elevated helper process so the UAC prompt
+            // only shows once per session instead of on every connection
+            args.StatusCode = elevatedDeviceHelper.ReEnableDevice(args.InstanceId);
         }
 
         public void CheckHidHidePresence(string ExePath = "", string ExeName = "Autoprofile Exe", bool AddExe = true) // Default value for D4W Startup

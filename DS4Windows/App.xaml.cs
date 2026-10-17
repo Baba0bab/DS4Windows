@@ -399,6 +399,13 @@ namespace DS4WinWPF
                 exitApp = true;
                 Current.Shutdown();
             }
+            else if (parser.DeviceHelper)
+            {
+                DS4Windows.ElevatedDeviceHelper.RunHelper(parser.DeviceHelperPipe);
+                runShutdown = false;
+                exitApp = true;
+                Current.Shutdown();
+            }
             else if (parser.Runtask)
             {
                 StartupMethods.LaunchOldTask();

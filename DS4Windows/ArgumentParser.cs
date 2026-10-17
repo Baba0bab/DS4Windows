@@ -28,6 +28,8 @@ namespace DS4WinWPF
         private bool driverinstall;
         private bool reenableDevice;
         private string deviceInstanceId;
+        private bool deviceHelper;
+        private string deviceHelperPipe;
         private bool runtask;
         private bool command;
         private string commandArgs;
@@ -40,6 +42,8 @@ namespace DS4WinWPF
         public bool Stop { get => stop; }
         public bool Driverinstall { get => driverinstall; }
         public bool ReenableDevice { get => reenableDevice; }
+        public bool DeviceHelper { get => deviceHelper; }
+        public string DeviceHelperPipe { get => deviceHelperPipe; }
         public bool Runtask { get => runtask; }
         public bool Command { get => command; }
         public string DeviceInstanceId { get => deviceInstanceId; }
@@ -69,6 +73,15 @@ namespace DS4WinWPF
                         if (i + 1 < args.Length)
                         {
                             deviceInstanceId = args[++i];
+                        }
+
+                        break;
+
+                    case DS4Windows.ElevatedDeviceHelper.HELPER_ARG:
+                        deviceHelper = true;
+                        if (i + 1 < args.Length)
+                        {
+                            deviceHelperPipe = args[++i];
                         }
 
                         break;
