@@ -140,6 +140,7 @@ namespace DS4WinWPF.DS4Forms
             profileSettingsVM.SXDeadZoneChanged += UpdateReadingsSXDeadZone;
             profileSettingsVM.SZDeadZoneChanged += UpdateReadingsSZDeadZone;
             profileSettingsVM.TouchpadOutputIndexChanged += TouchpadOutputDisplayChange;
+            profileSettingsVM.RainbowChanged += ProfileSettingsVM_RainbowChanged;
 
             profileSettingsVM.LeftStickDriftXAxisChanged += UpdateReadingsLSDrift;
             profileSettingsVM.LeftStickDriftYAxisChanged += UpdateReadingsLSDrift;
@@ -161,6 +162,7 @@ namespace DS4WinWPF.DS4Forms
             profileSettingsVM.SXDeadZoneChanged -= UpdateReadingsSXDeadZone;
             profileSettingsVM.SZDeadZoneChanged -= UpdateReadingsSZDeadZone;
             profileSettingsVM.TouchpadOutputIndexChanged -= TouchpadOutputDisplayChange;
+            profileSettingsVM.RainbowChanged -= ProfileSettingsVM_RainbowChanged;
 
             axialLSStickControl.AxialVM.DeadZoneXChanged -= UpdateReadingsLsDeadZoneX;
             axialLSStickControl.AxialVM.DeadZoneYChanged -= UpdateReadingsLsDeadZoneY;
@@ -783,6 +785,7 @@ namespace DS4WinWPF.DS4Forms
             }
 
             ColorByBatteryPerCheck();
+            RainbowStateCheck();
 
             if (device < Global.TEST_PROFILE_INDEX)
             {
@@ -1343,20 +1346,21 @@ namespace DS4WinWPF.DS4Forms
         private void RainbowBtn_Click(object sender, RoutedEventArgs e)
         {
             bool active = profileSettingsVM.Rainbow != 0.0;
-            if (active)
-            {
-                profileSettingsVM.Rainbow = 0.0;
-                colorByBatteryPerCk.Content = Properties.Resources.ColorByBattery;
-                colorGB.IsEnabled = true;
-                emptyColorGB.IsEnabled = true;
-            }
-            else
-            {
-                profileSettingsVM.Rainbow = 5.0;
-                colorByBatteryPerCk.Content = Properties.Resources.DimByBattery;
-                colorGB.IsEnabled = false;
-                emptyColorGB.IsEnabled = false;
-            }
+            profileSettingsVM.Rainbow = active ? 0.0 : 5.0;
+        }
+
+        private void ProfileSettingsVM_RainbowChanged(object sender, EventArgs e)
+        {
+            RainbowStateCheck();
+        }
+
+        private void RainbowStateCheck()
+        {
+            bool active = profileSettingsVM.Rainbow != 0.0;
+            colorByBatteryPerCk.Content = active ? Properties.Resources.DimByBattery :
+                Properties.Resources.ColorByBattery;
+            colorGB.IsEnabled = !active;
+            emptyColorGB.IsEnabled = !active;
         }
 
         private void ChargingColorBtn_Click(object sender, RoutedEventArgs e)
