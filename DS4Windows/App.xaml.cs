@@ -698,6 +698,8 @@ namespace DS4WinWPF
         public void ChangeTheme(DS4Windows.AppThemeChoice themeChoice,
             bool fireChanged = true)
         {
+            DS4Forms.Themes.WindowChromeTheme.Register();
+
             if (themeChoice == DS4Windows.AppThemeChoice.Default)
             {
                 Application.Current.Resources.MergedDictionaries.Clear();
@@ -723,6 +725,8 @@ namespace DS4WinWPF
                     ThemeChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
+
+            DS4Forms.Themes.WindowChromeTheme.ApplyToAllWindows();
         }
 
         private void Application_Exit(object sender, ExitEventArgs e)
