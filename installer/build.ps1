@@ -77,7 +77,8 @@ $sums = Get-ChildItem $outputDir -File |
     Sort-Object Name |
     ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
 $sumsFile = Join-Path $outputDir 'SHA256SUMS.txt'
-[IO.File]::WriteAllLines($sumsFile, [string[]]$sums)
+# Fins de ligne LF : avec CRLF, « sha256sum -c » ne retrouve pas les fichiers
+[IO.File]::WriteAllText($sumsFile, (($sums -join "`n") + "`n"))
 $sums | ForEach-Object { Write-Host "  $_" }
 
 Write-Host "Fichiers prêts dans $outputDir" -ForegroundColor Green
