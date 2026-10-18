@@ -79,6 +79,8 @@ Ce que fait l'installeur :
 - Ferme proprement DS4Windows s'il tourne (via `DS4Windows.exe -command shutdown`).
 - Prévient si le .NET 10 Desktop Runtime manque, et propose d'installer les pilotes si ViGEmBus est absent.
 - Si « Lancer au démarrage » était activé, redirige ce raccourci vers la copie installée.
+- Lancé par la mise à jour automatique (`/SILENT /UPDATE=1`), relance DS4Windows à la fin.
+  Une installation silencieuse sans `/UPDATE=1` (déploiement) ne lance rien.
 - Pose un fichier `DS4Windows.installed` à côté de l'exe : une copie installée range toujours
   ses réglages dans `%APPDATA%\DS4Windows`, sans poser la question au premier lancement.
 - La désinstallation retire aussi le lancement au démarrage et demande si on veut supprimer
@@ -106,9 +108,17 @@ Ce que fait l'installeur :
 6. Faire un raccourci vers `C:\Programmes\DS4Windows\DS4Windows.exe` (bureau / menu Démarrer).
 
 > La vérification de mises à jour interroge **mon** dépôt (`Baba0bab/DS4Windows`, release
-> marquée « Latest »). Si une version plus récente existe, l'appli affiche ses notes et
-> « Oui » ouvre la page de la release dans le navigateur : rien n'est téléchargé ni remplacé
-> automatiquement.
+> marquée « Latest »). Si une version plus récente existe, l'appli affiche ses notes, et « Oui » :
+> - **copie installée par l'installeur** (fichier `DS4Windows.installed` à côté de l'exe) :
+>   télécharge `DS4Windows_<version>_x64_Setup.exe` dans `%TEMP%\DS4Windows_update`, vérifie
+>   son empreinte avec le `SHA256SUMS.txt` de la release, lance l'installation silencieuse
+>   (mêmes dossier, mode « pour moi / pour tous » et options qu'avant) puis se ferme ;
+>   l'installeur relance DS4Windows à la fin. Une installation dans `Program Files` affiche
+>   la demande de droits admin de Windows. Journal de l'installation :
+>   `%TEMP%\DS4Windows_update\install.log` ;
+> - **copie portable** (zip, dossier copié à la main) ou échec (fichier absent de la release,
+>   empreinte différente, réseau) : un message explique pourquoi, puis la page de la release
+>   s'ouvre dans le navigateur.
 
 ---
 
@@ -196,8 +206,12 @@ C'est ce que l'appli consulte pour proposer une mise à jour : le **tag** donne 
    ```
    `notes.md` : copier la section de la version depuis `Changelog.md`.
 
-- Garder les noms de fichiers produits par `build.ps1` : `ds4w.bat` (et plus tard la mise à
-  jour automatique) les retrouvent d'après le numéro de version.
+- Garder les noms de fichiers produits par `build.ps1` et toujours joindre `SHA256SUMS.txt` :
+  `ds4w.bat` et la mise à jour automatique retrouvent les fichiers d'après le numéro de
+  version, et la mise à jour refuse un installeur dont l'empreinte n'est pas dans ce fichier.
+- Une version construite avec `-SelfContained` ne se met à jour qu'avec
+  `DS4Windows_<version>_x64_selfcontained_Setup.exe` : le joindre aussi à la release si
+  quelqu'un utilise cette variante (sinon la page de la release s'ouvre).
 - Une release « pre-release » n'est jamais proposée aux utilisateurs : pratique pour tester.
 - Le tag doit toujours commencer par `v` suivi d'un numéro `X.Y.Z`.
 

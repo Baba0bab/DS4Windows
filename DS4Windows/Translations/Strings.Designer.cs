@@ -4059,5 +4059,68 @@ namespace DS4WinWPF.Translations {
                 return ResourceManager.GetString("Yes", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Downloading the update… {0}.
+        /// </summary>
+        public static string UpdaterWin_Downloading {
+            get {
+                return ResourceManager.GetString("UpdaterWin.Downloading", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Starting the installer….
+        /// </summary>
+        public static string UpdaterWin_StartingInstaller {
+            get {
+                return ResourceManager.GetString("UpdaterWin.StartingInstaller", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This copy of DS4Windows was not installed with the setup program, so it cannot update itself.....
+        /// </summary>
+        public static string UpdaterWin_PortableCopy {
+            get {
+                return ResourceManager.GetString("UpdaterWin.PortableCopy", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The update could not be installed automatically:....
+        /// </summary>
+        public static string UpdaterWin_AutoUpdateFailed {
+            get {
+                return ResourceManager.GetString("UpdaterWin.AutoUpdateFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to the release does not include the installer {0}..
+        /// </summary>
+        public static string UpdaterWin_NoInstallerAsset {
+            get {
+                return ResourceManager.GetString("UpdaterWin.NoInstallerAsset", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to the release does not include the SHA-256 checksum of {0}..
+        /// </summary>
+        public static string UpdaterWin_NoChecksum {
+            get {
+                return ResourceManager.GetString("UpdaterWin.NoChecksum", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to the downloaded installer is damaged (its SHA-256 checksum does not match)..
+        /// </summary>
+        public static string UpdaterWin_ChecksumMismatch {
+            get {
+                return ResourceManager.GetString("UpdaterWin.ChecksumMismatch", resourceCulture);
+            }
+        }
     }
 }

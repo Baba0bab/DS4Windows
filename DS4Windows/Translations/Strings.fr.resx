@@ -744,4 +744,30 @@ Désactivé:
   <data name="ControllerSupportDS3" xml:space="preserve">
     <value>Support manette DS3</value>
   </data>
+  <data name="UpdaterWin.Downloading" xml:space="preserve">
+    <value>Téléchargement de la mise à jour… {0}</value>
+  </data>
+  <data name="UpdaterWin.StartingInstaller" xml:space="preserve">
+    <value>Lancement de l'installeur…</value>
+  </data>
+  <data name="UpdaterWin.PortableCopy" xml:space="preserve">
+    <value>Cette copie de DS4Windows n'a pas été installée avec l'installeur : elle ne peut pas se mettre à jour toute seule.
+
+La page de la version va s'ouvrir pour télécharger la nouvelle version.</value>
+  </data>
+  <data name="UpdaterWin.AutoUpdateFailed" xml:space="preserve">
+    <value>La mise à jour n'a pas pu être installée automatiquement :
+{0}
+
+La page de la version va s'ouvrir pour télécharger la nouvelle version.</value>
+  </data>
+  <data name="UpdaterWin.NoInstallerAsset" xml:space="preserve">
+    <value>la version ne contient pas l'installeur {0}.</value>
+  </data>
+  <data name="UpdaterWin.NoChecksum" xml:space="preserve">
+    <value>la version ne contient pas l'empreinte SHA-256 de {0}.</value>
+  </data>
+  <data name="UpdaterWin.ChecksumMismatch" xml:space="preserve">
+    <value>l'installeur téléchargé est abîmé (son empreinte SHA-256 ne correspond pas).</value>
+  </data>
 </root>

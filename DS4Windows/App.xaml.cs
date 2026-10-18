@@ -68,7 +68,7 @@ namespace DS4WinWPF
         private bool exitComThread = false;
         private const string SingleAppComEventName = "{a52b5b20-d9ee-4f32-8518-307fa14aa0c6}";
         // Marker file dropped next to the exe by the installer
-        private const string InstalledMarkerFileName = "DS4Windows.installed";
+        internal const string InstalledMarkerFileName = "DS4Windows.installed";
         private EventWaitHandle threadComEvent = null;
         private Timer collectTimer;
         private static LoggerHolder logHolder;

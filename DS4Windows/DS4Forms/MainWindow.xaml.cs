@@ -245,15 +245,28 @@ namespace DS4WinWPF.DS4Forms
         private void DisplayUpdaterWindow(string version)
         {
             MessageBoxResult result = MessageBoxResult.No;
+            string installerPath = null;
             Dispatcher.Invoke(() =>
             {
                 var updaterWin = new UpdaterWindow(version);
                 updaterWin.ShowDialog();
                 result = updaterWin.Result;
+                installerPath = updaterWin.InstallerPath;
             });
 
-            // Updates are installed from the fork's release page
-            if (result == MessageBoxResult.Yes)
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            // An installed copy runs the downloaded setup silently: it updates the
+            // files and starts DS4Windows again. Otherwise (portable copy, failed
+            // download) the update is downloaded from the release page
+            if (installerPath != null && AppUpdater.LaunchInstaller(installerPath))
+            {
+                // Set that the window is getting ready to close for other components
+                contextclose = true;
+                Dispatcher.BeginInvoke(Close);
+            }
+            else
             {
                 Util.StartProcessHelper(Changelog.ReleasePageUri(version));
             }

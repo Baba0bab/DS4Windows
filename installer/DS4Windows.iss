@@ -80,6 +80,9 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; WorkingDir: "{app
 [Run]
 Filename: "{app}\{#AppExe}"; Parameters: "-driverinstall"; WorkingDir: "{app}"; Description: "{cm:InstallDrivers}"; Flags: postinstall skipifsilent runasoriginaluser; Check: IsDotNetReady and not IsViGEmBusInstalled
 Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: postinstall nowait skipifsilent runasoriginaluser; Check: IsDotNetReady
+; Mise à jour automatique (installation silencieuse lancée par DS4Windows, qui
+; s'est fermé) : on relance DS4Windows une fois les fichiers remplacés
+Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Flags: nowait runasoriginaluser; Check: IsAppUpdate and IsDotNetReady
 
 [UninstallDelete]
 ; Fichiers créés par l'appli elle-même (démarrage via tâche planifiée, updater)
@@ -115,6 +118,13 @@ begin
 #else
   Result := IsDotNetDesktop10Installed;
 #endif
+end;
+
+{ Installation silencieuse lancée par la mise à jour automatique de DS4Windows
+  (/SILENT /UPDATE=1). Un déploiement silencieux sans /UPDATE=1 ne lance rien. }
+function IsAppUpdate: Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:UPDATE|0}') = '1');
 end;
 
 function IsViGEmBusInstalled: Boolean;

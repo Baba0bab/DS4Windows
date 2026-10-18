@@ -1,3 +1,9 @@
+## Version 4.1.0
+
+**Updates**
+* Automatic update for copies installed with the setup program: accepting an update downloads the new installer from the release, checks its SHA-256 checksum against the release's SHA256SUMS.txt, then installs it silently and starts DS4Windows again. An all-users install in Program Files asks for administrator rights
+* Portable copies (zip or folder), or a failed download, still open the release page, now with a message explaining why
+
 ## Version 4.0.0
 
 First release of the Baba0bab fork, based on DS4Windows 3.9.9 by schmaldeo.

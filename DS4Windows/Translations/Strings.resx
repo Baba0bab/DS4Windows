@@ -1478,4 +1478,30 @@ Please click OK to confirm that you have read the message. Press Cancel to be re
   <data name="InverseMotors" xml:space="preserve">
     <value>Inverse motors</value>
   </data>
+  <data name="UpdaterWin.Downloading" xml:space="preserve">
+    <value>Downloading the update… {0}</value>
+  </data>
+  <data name="UpdaterWin.StartingInstaller" xml:space="preserve">
+    <value>Starting the installer…</value>
+  </data>
+  <data name="UpdaterWin.PortableCopy" xml:space="preserve">
+    <value>This copy of DS4Windows was not installed with the setup program, so it cannot update itself.
+
+The release page will open so you can download the new version.</value>
+  </data>
+  <data name="UpdaterWin.AutoUpdateFailed" xml:space="preserve">
+    <value>The update could not be installed automatically:
+{0}
+
+The release page will open so you can download the new version.</value>
+  </data>
+  <data name="UpdaterWin.NoInstallerAsset" xml:space="preserve">
+    <value>the release does not include the installer {0}.</value>
+  </data>
+  <data name="UpdaterWin.NoChecksum" xml:space="preserve">
+    <value>the release does not include the SHA-256 checksum of {0}.</value>
+  </data>
+  <data name="UpdaterWin.ChecksumMismatch" xml:space="preserve">
+    <value>the downloaded installer is damaged (its SHA-256 checksum does not match).</value>
+  </data>
 </root>
