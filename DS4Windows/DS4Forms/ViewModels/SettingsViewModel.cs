@@ -187,39 +187,21 @@ namespace DS4WinWPF.DS4Forms.ViewModels
 
         public int CheckEvery
         {
-            get
-            {
-                int temp = DS4Windows.Global.CheckWhen;
-                if (temp > 23)
-                {
-                    temp = temp / 24;
-                }
-                return temp;
-            }
+            get => DS4Windows.Global.CheckWhen / HoursPerCheckUnit;
             set
             {
-                int temp;
-                if (checkEveryUnitIdx == 0 && value < 24)
+                int hours = value * HoursPerCheckUnit;
+                if (DS4Windows.Global.CheckWhen != hours)
                 {
-                    temp = DS4Windows.Global.CheckWhen;
-                    if (temp != value)
-                    {
-                        DS4Windows.Global.CheckWhen = value;
-                        CheckForNoUpdatesWhen();
-                    }
-                }
-                else if (checkEveryUnitIdx == 1)
-                {
-                    temp = DS4Windows.Global.CheckWhen / 24;
-                    if (temp != value)
-                    {
-                        DS4Windows.Global.CheckWhen = value * 24;
-                        CheckForNoUpdatesWhen();
-                    }
+                    DS4Windows.Global.CheckWhen = hours;
+                    CheckForNoUpdatesWhen();
                 }
             }
         }
         public event EventHandler CheckEveryChanged;
+
+        // CheckWhen is stored in hours; the unit only decides how it is shown and edited
+        private int HoursPerCheckUnit => checkEveryUnitIdx == 1 ? 24 : 1;
 
         private int checkEveryUnitIdx = 1;
         public int CheckEveryUnit
@@ -231,7 +213,16 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             set
             {
                 if (checkEveryUnitIdx == value) return;
+
+                // Keep the number shown and convert the stored hours to the new unit
+                int shown = CheckEvery;
                 checkEveryUnitIdx = value;
+                if (shown > 0)
+                {
+                    DS4Windows.Global.CheckWhen = shown * HoursPerCheckUnit;
+                }
+
+                CheckEveryChanged?.Invoke(this, EventArgs.Empty);
                 CheckEveryUnitChanged?.Invoke(this, EventArgs.Empty);
             }
         }
@@ -430,7 +421,7 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             IsProfileChangedCheckVisible = Global.Notifications == 2 ? Visibility.Visible : Visibility.Collapsed;
 
             int checklapse = DS4Windows.Global.CheckWhen;
-            if (checklapse < 24 && checklapse > 0)
+            if (checklapse > 0 && checklapse % 24 != 0)
             {
                 checkEveryUnitIdx = 0;
             }
