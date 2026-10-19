@@ -1396,6 +1396,17 @@ Suspend support not enabled.", true);
             catch { }
         }
 
+        private void ProgFolderBtn_Click(object sender, RoutedEventArgs e)
+        {
+            ProcessStartInfo startInfo = new ProcessStartInfo(Global.exedirpath);
+            startInfo.UseShellExecute = true;
+            try
+            {
+                using (Process temp = Process.Start(startInfo)) {}
+            }
+            catch { }
+        }
+
         private void ControlPanelBtn_Click(object sender, RoutedEventArgs e)
         {
             Process.Start("control", "joy.cpl");
@@ -1673,14 +1684,22 @@ Suspend support not enabled.", true);
             }
         }
 
-        private void NotifyIcon_TrayMouseDoubleClick(object sender, RoutedEventArgs e)
+        private void NotifyIcon_TrayLeftMouseUp(object sender, RoutedEventArgs e)
         {
+            // Window already open: a left click toggles it back to minimized
+            if (IsVisible && WindowState != WindowState.Minimized)
+            {
+                WindowState = WindowState.Minimized;
+                return;
+            }
+
             if (!showAppInTaskbar)
             {
                 Show();
             }
 
             WindowState = WindowState.Normal;
+            Activate();
         }
 
         private void ProfilesListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)

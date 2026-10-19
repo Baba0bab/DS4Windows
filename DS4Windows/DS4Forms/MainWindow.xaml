@@ -21,7 +21,7 @@
         <local:ImageLocationPaths x:Key="ImgLocPaths" />
     </Window.Resources>
     <DockPanel>
-        <tb:TaskbarIcon x:Name="notifyIcon" IconSource="{Binding IconSource,Mode=OneWay}" ToolTipText="{Binding TooltipText,Mode=OneWay}" MenuActivation="RightClick" TrayRightMouseUp="NotifyIcon_TrayRightMouseUp" TrayMiddleMouseDown="NotifyIcon_TrayMiddleMouseDown" TrayMouseDoubleClick="NotifyIcon_TrayMouseDoubleClick">
+        <tb:TaskbarIcon x:Name="notifyIcon" IconSource="{Binding IconSource,Mode=OneWay}" ToolTipText="{Binding TooltipText,Mode=OneWay}" MenuActivation="RightClick" TrayRightMouseUp="NotifyIcon_TrayRightMouseUp" TrayMiddleMouseDown="NotifyIcon_TrayMiddleMouseDown" TrayLeftMouseUp="NotifyIcon_TrayLeftMouseUp">
             <!--<tb:TaskbarIcon.ContextMenu>
                 <ContextMenu>
                     <MenuItem Header="Open" />
@@ -428,6 +428,10 @@
                                 <Button x:Name="profFolderBtn" BorderThickness="0" Margin="0,0,4,4" Background="{x:Null}" BorderBrush="{x:Null}"
                                     Style="{StaticResource NoBGHoverBtn}" Click="ProfFolderBtn_Click">
                                     <TextBlock Text="{lex:Loc ProfileFolder}" TextDecorations="Underline" Foreground="{DynamicResource AccentColor}" Cursor="Hand" />
+                                </Button>
+                                <Button x:Name="progFolderBtn" BorderThickness="0" Margin="0,0,4,4" Background="{x:Null}" BorderBrush="{x:Null}"
+                                    Style="{StaticResource NoBGHoverBtn}" Click="ProgFolderBtn_Click">
+                                    <TextBlock Text="{lex:Loc ProgramFolder}" TextDecorations="Underline" Foreground="{DynamicResource AccentColor}" Cursor="Hand" />
                                 </Button>
                                 <Button x:Name="controlPanelBtn" BorderThickness="0" Margin="0,0,4,4" Background="{x:Null}" BorderBrush="{x:Null}"
                                     Style="{StaticResource NoBGHoverBtn}" Click="ControlPanelBtn_Click" >

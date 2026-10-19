@@ -37,7 +37,6 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         private MenuItem changeServiceItem;
         private MenuItem openItem;
         private MenuItem minimizeItem;
-        private MenuItem openProgramItem;
         private MenuItem closeItem;
 
 
@@ -103,8 +102,6 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             openItem.Click += OpenMenuItem_Click;
             minimizeItem = new MenuItem() { Header = "Minimize" };
             minimizeItem.Click += MinimizeMenuItem_Click;
-            openProgramItem = new MenuItem() { Header = "Open Program Folder" };
-            openProgramItem.Click += OpenProgramFolderItem_Click;
             closeItem = new MenuItem() { Header = "Exit" };
             closeItem.Click += ExitMenuItem_Click;
 
@@ -245,15 +242,6 @@ namespace DS4WinWPF.DS4Forms.ViewModels
         {
             changeServiceItem.IsEnabled = false;
             RequestServiceChange?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void OpenProgramFolderItem_Click(object sender, System.Windows.RoutedEventArgs e)
-        {
-            ProcessStartInfo startInfo = new ProcessStartInfo(Global.exedirpath);
-            startInfo.UseShellExecute = true;
-            using (Process temp = Process.Start(startInfo))
-            {
-            }
         }
 
         private void OpenMenuItem_Click(object sender, System.Windows.RoutedEventArgs e)
@@ -426,7 +414,6 @@ namespace DS4WinWPF.DS4Forms.ViewModels
             items.Add(changeServiceItem);
             items.Add(openItem);
             items.Add(minimizeItem);
-            items.Add(openProgramItem);
             items.Add(new Separator());
             items.Add(closeItem);
         }
