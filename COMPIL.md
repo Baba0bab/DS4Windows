@@ -194,7 +194,7 @@ git remote set-url upstream https://github.com/AUTEUR/DS4Windows.git
 ## 6. Publier une nouvelle version (release GitHub)
 
 C'est ce que l'appli consulte pour proposer une mise à jour : le **tag** donne le numéro
-(`v4.1.0` → 4.1.0) et la **description** de la release sert de notes de version.
+(`v4.1.1` → 4.1.1) et la **description** de la release sert de notes de version.
 
 1. Mettre le numéro dans `DS4Windows\DS4WinWPF.csproj` (`<Version>`, `<AssemblyVersion>`,
    `<FileVersion>`) et ajouter la section correspondante en haut de `DS4Windows\Changelog.md`.
@@ -202,7 +202,7 @@ C'est ce que l'appli consulte pour proposer une mise à jour : le **tag** donne 
 3. Construire : `powershell -ExecutionPolicy Bypass -File installeruild.ps1`
 4. Créer la release avec ses fichiers (le tag est créé sur `master`) :
    ```bash
-   gh release create v4.1.0 --repo Baba0bab/DS4Windows --title "DS4Windows 4.1.0" --notes-file notes.md installer/Output/DS4Windows_4.1.0_x64_Setup.exe installer/Output/DS4Windows_4.1.0_x64.zip installer/Output/SHA256SUMS.txt
+   gh release create v4.1.1 --repo Baba0bab/DS4Windows --title "DS4Windows 4.1.1" --notes-file notes.md installer/Output/DS4Windows_4.1.1_x64_Setup.exe installer/Output/DS4Windows_4.1.1_x64.zip installer/Output/SHA256SUMS.txt
    ```
    `notes.md` : copier la section de la version depuis `Changelog.md`.
 

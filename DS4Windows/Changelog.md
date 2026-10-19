@@ -1,3 +1,16 @@
+## Version 4.1.1
+
+**Controller detection**
+* A controller left disabled in Windows (exclusive mode interrupted, or the re-enable step failed) is now enabled again by the next scan, so it is found again without a manual fix. The enable step is also retried up to three times
+
+**Settings**
+* App settings are saved when leaving the Settings tab, so they are no longer lost if DS4Windows is killed or closes abnormally
+* The Hours/Days unit of "Check every" is now remembered, and values of 24 hours or more are no longer ignored
+
+**System tray**
+* A single left click on the tray icon opens the window, or minimizes it when it is already open
+* "Open Program Folder" moved from the tray menu to the Utils group of the Settings tab
+
 ## Version 4.1.0
 
 **Updates**
