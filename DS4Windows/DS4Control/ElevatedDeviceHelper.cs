@@ -37,6 +37,8 @@ namespace DS4Windows
     public class ElevatedDeviceHelper : IDisposable
     {
         public const string HELPER_ARG = "device-helper";
+        // Request lines without this prefix are a plain disable/enable cycle
+        private const string ENABLE_PREFIX = "enable:";
         private const int ERROR_CANCELLED = 1223;
         private const int CONNECT_TIMEOUT_MS = 30000;
         private const int MAX_INSTANCE_ID_LENGTH = 512;
@@ -65,6 +67,21 @@ namespace DS4Windows
         /// <returns>STATUS_SUCCESS when the device was cycled</returns>
         public int ReEnableDevice(string instanceId)
         {
+            return SendRequest(instanceId);
+        }
+
+        /// <summary>
+        /// Ask the elevated helper to enable a HID device that is currently
+        /// disabled. Starts the helper (single UAC prompt) on first use
+        /// </summary>
+        /// <returns>STATUS_SUCCESS when the device was enabled</returns>
+        public int EnableDevice(string instanceId)
+        {
+            return SendRequest(ENABLE_PREFIX + instanceId);
+        }
+
+        private int SendRequest(string request)
+        {
             lock (lockObj)
             {
                 if (userDeclined)
@@ -78,7 +95,7 @@ namespace DS4Windows
 
                     try
                     {
-                        writer.WriteLine(instanceId);
+                        writer.WriteLine(request);
                         string response = reader.ReadLine();
                         if (response != null && int.TryParse(response, out int status))
                             return status;
@@ -204,9 +221,11 @@ namespace DS4Windows
 
             try
             {
-                string instanceId;
-                while ((instanceId = reader.ReadLine()) != null)
+                string request;
+                while ((request = reader.ReadLine()) != null)
                 {
+                    bool enableOnly = request.StartsWith(ENABLE_PREFIX, StringComparison.Ordinal);
+                    string instanceId = enableOnly ? request.Substring(ENABLE_PREFIX.Length) : request;
                     int status;
                     if (!IsValidInstanceId(instanceId))
                     {
@@ -216,7 +235,10 @@ namespace DS4Windows
                     {
                         try
                         {
-                            DS4Devices.reEnableDevice(instanceId);
+                            if (enableOnly)
+                                DS4Devices.enableDevice(instanceId);
+                            else
+                                DS4Devices.reEnableDevice(instanceId);
                             status = STATUS_SUCCESS;
                         }
                         catch (Exception)

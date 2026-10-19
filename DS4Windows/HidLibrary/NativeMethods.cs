@@ -173,6 +173,9 @@ namespace DS4Windows
         internal const int SPDRP_UI_NUMBER = 0x10;
         internal const int SPDRP_UI_NUMBER_DESC_FORMAT = 0x1d;
 
+        internal const uint CR_SUCCESS = 0x00;
+        internal const uint CM_PROB_DISABLED = 0x16;
+
         internal const uint CM_LOCATE_DEVNODE_NORMAL = 0x00;
         internal const uint CM_LOCATE_DEVNODE_PHANTOM = 0x01;
         internal const uint CM_LOCATE_DEVNODE_CANCELREMOVE = 0x02;
@@ -387,10 +390,10 @@ namespace DS4Windows
         [DllImport("setupapi.dll", CharSet = CharSet.Auto)]
         static internal extern bool SetupDiGetDeviceInterfaceDetail(IntPtr deviceInfoSet, ref SP_DEVICE_INTERFACE_DATA deviceInterfaceData, ref SP_DEVICE_INTERFACE_DETAIL_DATA deviceInterfaceDetailData, int deviceInterfaceDetailDataSize, ref int requiredSize, IntPtr deviceInfoData);
 
-        [DllImport("setupapi.dll", CharSet = CharSet.Auto)]
+        [DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
         static internal extern bool SetupDiSetClassInstallParams(IntPtr deviceInfoSet, ref SP_DEVINFO_DATA deviceInfoData, ref SP_PROPCHANGE_PARAMS classInstallParams, int classInstallParamsSize);
 
-        [DllImport("setupapi.dll", CharSet = CharSet.Auto)]
+        [DllImport("setupapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
         static internal extern bool SetupDiCallClassInstaller(int installFunction, IntPtr deviceInfoSet, ref SP_DEVINFO_DATA deviceInfoData);
 
         [DllImport("setupapi.dll", CharSet = CharSet.Auto)]
@@ -401,6 +404,9 @@ namespace DS4Windows
 
         [DllImport("cfgmgr32.dll", CharSet = CharSet.Unicode)]
         static internal extern uint CM_Get_Device_Interface_Property(string pszDeviceInterface, ref DEVPROPKEY PropertyKey, out DEVPROPTYPE PropertyType, byte[] PropertyBuffer, ref uint PropertyBufferSize, uint ulFlags);
+
+        [DllImport("cfgmgr32.dll")]
+        static internal extern uint CM_Get_DevNode_Status(out uint status, out uint problemNumber, uint devInst, uint flags);
 
         [DllImport("user32.dll")]
         static internal extern bool UnregisterDeviceNotification(IntPtr handle);

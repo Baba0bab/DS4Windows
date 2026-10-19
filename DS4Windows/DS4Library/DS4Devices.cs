@@ -22,6 +22,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Text.RegularExpressions;
 using DS4Windows.InputDevices;
 
 namespace DS4Windows
@@ -80,6 +81,11 @@ namespace DS4Windows
             set => statusCode = value;
         }
         public string InstanceId { get => instanceId; }
+        /// <summary>
+        /// Only enable the device (it is already disabled) instead of
+        /// disabling then enabling it
+        /// </summary>
+        public bool EnableOnly { get; set; }
 
         public RequestElevationArgs(string instanceId)
         {
@@ -122,6 +128,15 @@ namespace DS4Windows
         // Keep instance of opened exclusive mode devices not in use (Charging while using BT connection)
         private static List<HidDevice> DisabledDevices = new List<HidDevice>();
         private static Stopwatch sw = new Stopwatch();
+        // HIDClass device setup class (not the HID device interface class)
+        private static readonly Guid hidSetupClassGuid = new Guid("745a17a0-74d3-11d0-b6fe-00a0c90f57da");
+        private static readonly Regex instanceVidPidRegex =
+            new Regex(@"VID[_&]([0-9A-F]{4,8})[_&]PID[_&]([0-9A-F]{4})", RegexOptions.IgnoreCase);
+        // Last time re-enabling a disabled controller was tried, per instance id
+        private static readonly Dictionary<string, DateTime> disabledRecoveryAttempts =
+            new Dictionary<string, DateTime>();
+        private const int DISABLED_RECOVERY_COOLDOWN_SECONDS = 30;
+        private const int ENABLE_ATTEMPTS = 3;
         public static event RequestElevationDelegate RequestElevation;
         public static PrepareInitDelegate PrepareDS4Init = null;
         public static PrepareInitDelegate PostDS4Init = null;
@@ -236,6 +251,10 @@ namespace DS4Windows
         {
             lock (Devices)
             {
+                // A controller left disabled by an interrupted disable/enable
+                // cycle exposes no HID interface, so it can never be found below
+                RecoverDisabledControllers();
+
                 IEnumerable<HidDevice> hDevices = HidDevices.EnumerateDS4(knownDevices);
                 hDevices = hDevices.Where(d =>
                 {
@@ -587,6 +606,195 @@ namespace DS4Windows
             }
         }
 
+        /// <summary>
+        /// Find controllers that Windows reports as present but disabled, and
+        /// enable them again. A device left disabled has no HID interface, so
+        /// it is invisible to HID enumeration and would never reconnect, even
+        /// after restarting DS4Windows
+        /// </summary>
+        private static void RecoverDisabledControllers()
+        {
+            List<string> disabledIds;
+            try
+            {
+                disabledIds = FindDisabledControllers();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.LogToGui($"Failed to look for disabled controllers: {ex.Message}", true);
+                return;
+            }
+
+            DateTime now = DateTime.UtcNow;
+            foreach (string instanceId in disabledIds)
+            {
+                if (disabledRecoveryAttempts.TryGetValue(instanceId, out DateTime lastAttempt) &&
+                    (now - lastAttempt).TotalSeconds < DISABLED_RECOVERY_COOLDOWN_SECONDS)
+                {
+                    continue;
+                }
+
+                disabledRecoveryAttempts[instanceId] = now;
+                AppLogger.LogToGui($"Controller {instanceId} is disabled in Windows. Enabling it again", true);
+
+                try
+                {
+                    bool enabled;
+                    if (Global.IsAdministrator())
+                    {
+                        enableDevice(instanceId);
+                        enabled = true;
+                    }
+                    else
+                    {
+                        RequestElevationArgs eleArgs = new RequestElevationArgs(instanceId) { EnableOnly = true };
+                        RequestElevation?.Invoke(eleArgs);
+                        enabled = eleArgs.StatusCode == RequestElevationArgs.STATUS_SUCCESS;
+                    }
+
+                    if (!enabled)
+                    {
+                        AppLogger.LogToGui($"Could not enable controller {instanceId}", true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.LogToGui($"Could not enable controller {instanceId}: {ex.Message}", true);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Instance ids of present HID nodes matching a supported controller
+        /// that are disabled in Device Manager
+        /// </summary>
+        private static List<string> FindDisabledControllers()
+        {
+            List<string> result = new List<string>();
+            Guid classGuid = hidSetupClassGuid;
+            IntPtr deviceInfoSet = NativeMethods.SetupDiGetClassDevs(ref classGuid, null, 0, NativeMethods.DIGCF_PRESENT);
+            if (deviceInfoSet.ToInt64() == NativeMethods.INVALID_HANDLE_VALUE)
+            {
+                return result;
+            }
+
+            try
+            {
+                NativeMethods.SP_DEVINFO_DATA deviceInfoData = new NativeMethods.SP_DEVINFO_DATA();
+                deviceInfoData.cbSize = Marshal.SizeOf(deviceInfoData);
+                char[] idBuffer = new char[512];
+                for (int i = 0; NativeMethods.SetupDiEnumDeviceInfo(deviceInfoSet, i, ref deviceInfoData); i++)
+                {
+                    if (NativeMethods.CM_Get_DevNode_Status(out _, out uint problem,
+                        (uint)deviceInfoData.DevInst, 0) != NativeMethods.CR_SUCCESS ||
+                        problem != NativeMethods.CM_PROB_DISABLED)
+                    {
+                        continue;
+                    }
+
+                    int requiredSize = 0;
+                    if (!NativeMethods.SetupDiGetDeviceInstanceId(deviceInfoSet, ref deviceInfoData,
+                        idBuffer, idBuffer.Length, ref requiredSize))
+                    {
+                        continue;
+                    }
+
+                    string instanceId = new string(idBuffer, 0, Math.Max(0, requiredSize - 1));
+                    Match match = instanceVidPidRegex.Match(instanceId);
+                    if (!match.Success)
+                    {
+                        continue;
+                    }
+
+                    // Bluetooth ids use a 32-bit vendor field (VID&0002054C)
+                    string vidText = match.Groups[1].Value;
+                    int vid = Convert.ToInt32(vidText.Substring(vidText.Length - 4), 16);
+                    int pid = Convert.ToInt32(match.Groups[2].Value, 16);
+                    if (knownDevices.Any(x => x.vid == vid && x.pid == pid))
+                    {
+                        result.Add(instanceId);
+                    }
+                }
+            }
+            finally
+            {
+                NativeMethods.SetupDiDestroyDeviceInfoList(deviceInfoSet);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Enable a device that is currently disabled. Needs administrator rights
+        /// </summary>
+        public static void enableDevice(string deviceInstanceId)
+        {
+            IntPtr deviceInfoSet = NativeMethods.SetupDiCreateDeviceInfoList(IntPtr.Zero, 0);
+            if (deviceInfoSet.ToInt64() == NativeMethods.INVALID_HANDLE_VALUE)
+            {
+                throw new Exception("Error creating device info set, error code = " + Marshal.GetLastWin32Error());
+            }
+
+            try
+            {
+                NativeMethods.SP_DEVINFO_DATA deviceInfoData = new NativeMethods.SP_DEVINFO_DATA();
+                deviceInfoData.cbSize = Marshal.SizeOf(deviceInfoData);
+                // Opens the node by instance id. A disabled device has no
+                // device interface so it cannot be located by interface
+                if (!NativeMethods.SetupDiOpenDeviceInfo(deviceInfoSet, deviceInstanceId, IntPtr.Zero, 0, ref deviceInfoData))
+                {
+                    throw new Exception("Error getting device info data, error code = " + Marshal.GetLastWin32Error());
+                }
+
+                EnableDeviceWithRetry(deviceInfoSet, ref deviceInfoData);
+            }
+            finally
+            {
+                NativeMethods.SetupDiDestroyDeviceInfoList(deviceInfoSet);
+            }
+        }
+
+        private static int ChangeDeviceState(IntPtr deviceInfoSet,
+            ref NativeMethods.SP_DEVINFO_DATA deviceInfoData, int stateChange)
+        {
+            NativeMethods.SP_PROPCHANGE_PARAMS propChangeParams = new NativeMethods.SP_PROPCHANGE_PARAMS();
+            propChangeParams.classInstallHeader.cbSize = Marshal.SizeOf(propChangeParams.classInstallHeader);
+            propChangeParams.classInstallHeader.installFunction = NativeMethods.DIF_PROPERTYCHANGE;
+            propChangeParams.stateChange = stateChange;
+            propChangeParams.scope = NativeMethods.DICS_FLAG_GLOBAL;
+            propChangeParams.hwProfile = 0;
+            if (!NativeMethods.SetupDiSetClassInstallParams(deviceInfoSet, ref deviceInfoData,
+                ref propChangeParams, Marshal.SizeOf(propChangeParams)))
+            {
+                return Marshal.GetLastWin32Error();
+            }
+
+            if (!NativeMethods.SetupDiCallClassInstaller(NativeMethods.DIF_PROPERTYCHANGE, deviceInfoSet, ref deviceInfoData))
+            {
+                return Marshal.GetLastWin32Error();
+            }
+
+            return 0;
+        }
+
+        private static void EnableDeviceWithRetry(IntPtr deviceInfoSet,
+            ref NativeMethods.SP_DEVINFO_DATA deviceInfoData)
+        {
+            int error = 0;
+            for (int attempt = 0; attempt < ENABLE_ATTEMPTS; attempt++)
+            {
+                error = ChangeDeviceState(deviceInfoSet, ref deviceInfoData, NativeMethods.DICS_ENABLE);
+                if (error == 0)
+                {
+                    return;
+                }
+
+                System.Threading.Thread.Sleep(300);
+            }
+
+            throw new Exception("Error enabling device, error code = " + error);
+        }
+
         public static void reEnableDevice(string deviceInstanceId)
         {
             bool success;
@@ -643,17 +851,8 @@ namespace DS4Windows
                 }
                 sw.Stop();
 
-                propChangeParams.stateChange = NativeMethods.DICS_ENABLE;
-                success = NativeMethods.SetupDiSetClassInstallParams(deviceInfoSet, ref deviceInfoData, ref propChangeParams, Marshal.SizeOf(propChangeParams));
-                if (!success)
-                {
-                    throw new Exception("Error setting class install params, error code = " + Marshal.GetLastWin32Error());
-                }
-                success = NativeMethods.SetupDiCallClassInstaller(NativeMethods.DIF_PROPERTYCHANGE, deviceInfoSet, ref deviceInfoData);
-                if (!success)
-                {
-                    throw new Exception("Error enabling device, error code = " + Marshal.GetLastWin32Error());
-                }
+                // Never leave the device disabled because of a transient failure
+                EnableDeviceWithRetry(deviceInfoSet, ref deviceInfoData);
 
                 //System.Threading.Thread.Sleep(50);
                 /*sw.Restart();

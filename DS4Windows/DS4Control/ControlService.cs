@@ -622,7 +622,9 @@ namespace DS4Windows
         {
             // Reuses a single elevated helper process so the UAC prompt
             // only shows once per session instead of on every connection
-            args.StatusCode = elevatedDeviceHelper.ReEnableDevice(args.InstanceId);
+            args.StatusCode = args.EnableOnly ?
+                elevatedDeviceHelper.EnableDevice(args.InstanceId) :
+                elevatedDeviceHelper.ReEnableDevice(args.InstanceId);
         }
 
         public void CheckHidHidePresence(string ExePath = "", string ExeName = "Autoprofile Exe", bool AddExe = true) // Default value for D4W Startup
