@@ -799,6 +799,11 @@ Suspend support not enabled.", true);
 
         private void MainTabCon_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (ReferenceEquals(e.OriginalSource, mainTabCon) && e.RemovedItems.Contains(settingsTab))
+            {
+                Global.Save();
+            }
+
             if (mainTabCon.SelectedIndex == 4)
             {
                 lastMsgLb.Visibility = Visibility.Hidden;
