@@ -162,6 +162,37 @@ namespace DS4Windows
         [DllImport("winmm.dll")]
         internal static extern uint timeEndPeriod(uint period);
 
+        private static readonly object highTimerResLock = new object();
+        private static bool highTimerResActive;
+
+        /// <summary>
+        /// Request (or release) the 1 ms system timer resolution. Idempotent, so
+        /// timeBeginPeriod/timeEndPeriod calls always stay balanced. Should only be
+        /// enabled while a controller is connected: a permanent 1 ms request keeps
+        /// the CPU waking up ~1000 times per second even when DS4Windows is idle.
+        /// </summary>
+        public static void SetHighTimerResolution(bool enable)
+        {
+            lock (highTimerResLock)
+            {
+                if (enable == highTimerResActive)
+                {
+                    return;
+                }
+
+                if (enable)
+                {
+                    timeBeginPeriod(1);
+                }
+                else
+                {
+                    timeEndPeriod(1);
+                }
+
+                highTimerResActive = enable;
+            }
+        }
+
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern bool EnumDisplayDevicesW(string lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
 

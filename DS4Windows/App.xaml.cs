@@ -138,8 +138,9 @@ namespace DS4WinWPF
                 // Ignore exception
             }
 
-            // Allow sleep time durations less than 16 ms
-            DS4Windows.Util.timeBeginPeriod(1);
+            // 1 ms timer resolution (sleep durations < 16 ms) is no longer requested
+            // for the whole app lifetime. MainWindow requests it only while at least
+            // one controller is connected (see MainWindow.UpdateIdleState).
 
             // Retrieve info about installed ViGEmBus device if found
             DS4Windows.Global.RefreshViGEmBusInfo();
@@ -805,8 +806,8 @@ namespace DS4WinWPF
                     DS4Windows.Global.Save();
                 }
 
-                // Reset timer
-                DS4Windows.Util.timeEndPeriod(1);
+                // Reset timer (no-op if not currently requested)
+                DS4Windows.Util.SetHighTimerResolution(false);
 
                 exitComThread = true;
                 if (threadComEvent != null)
