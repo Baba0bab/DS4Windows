@@ -175,6 +175,8 @@ namespace DS4WinWPF.DS4Forms
                 hotkeysTimer = new NonFormTimer();
                 hotkeysTimer.Interval = 20;
                 hotkeysTimer.AutoReset = false;
+                // Subscribe once; ChangeHotkeysStatus only starts/stops the timer
+                hotkeysTimer.Elapsed += HotkeysTimer_Elapsed;
 
                 autoProfilesTimer = new NonFormTimer();
                 autoProfilesTimer.Interval = 1000;
@@ -412,12 +414,26 @@ Suspend support not enabled.", true);
 
         private void ControlServiceStarted(object sender, EventArgs e)
         {
-            if (Global.SwipeProfiles)
-            {
-                ChangeHotkeysStatus(true);
-            }
+            // Swipe polling timer and 1 ms timer resolution are only enabled
+            // once a controller is actually connected
+            Dispatcher.BeginInvoke((Action)UpdateIdleState);
 
             CheckAutoProfileStatus();
+        }
+
+        /// <summary>
+        /// Keep the 50 Hz swipe-polling timer and the 1 ms system timer resolution
+        /// alive only while at least one controller is connected. With no controller,
+        /// DS4Windows must not wake the CPU continuously (prevents deep C-states and
+        /// core parking).
+        /// </summary>
+        private void UpdateIdleState()
+        {
+            bool hasControllers = App.rootHub.running &&
+                conLvViewModel.ControllerCol.Count > 0;
+
+            Util.SetHighTimerResolution(hasControllers);
+            ChangeHotkeysStatus(hasControllers && Global.SwipeProfiles);
         }
 
         private void AutoprofileChecker_RequestServiceChange(AutoProfileChecker sender, bool state)
@@ -516,17 +532,23 @@ Suspend support not enabled.", true);
             }
         }
 
+        private volatile bool hotkeysActive;
+
         private void ChangeHotkeysStatus(bool state)
         {
+            if (state == hotkeysActive)
+            {
+                return;
+            }
+
+            hotkeysActive = state;
             if (state)
             {
-                hotkeysTimer.Elapsed += HotkeysTimer_Elapsed;
                 hotkeysTimer.Start();
             }
             else
             {
                 hotkeysTimer.Stop();
-                hotkeysTimer.Elapsed -= HotkeysTimer_Elapsed;
             }
         }
 
@@ -583,7 +605,11 @@ Suspend support not enabled.", true);
                 }
             }
 
-            hotkeysTimer.Start();
+            // Don't re-arm if polling was disabled while this callback was running
+            if (hotkeysActive)
+            {
+                hotkeysTimer.Start();
+            }
         }
 
         private void ShowHotkeyNotification(string message)
@@ -603,6 +629,7 @@ Suspend support not enabled.", true);
             }));
 
             ChangeHotkeysStatus(false);
+            Util.SetHighTimerResolution(false);
         }
 
         private void TrayIconVM_RequestOpen(object sender, EventArgs e)
@@ -705,6 +732,10 @@ Suspend support not enabled.", true);
 
                 if (App.rootHub.running)
                     trayIconVM.PopulateContextMenu();
+
+                // Controller connected/disconnected: enable or release the
+                // wake-up sources that are only useful with a controller
+                UpdateIdleState();
             }));
         }
 
@@ -1604,8 +1635,9 @@ Suspend support not enabled.", true);
 
         private void SwipeTouchCk_Click(object sender, RoutedEventArgs e)
         {
-            bool status = swipeTouchCk.IsChecked == true;
-            ChangeHotkeysStatus(status);
+            // Global.SwipeProfiles is already updated by the IsChecked binding;
+            // only poll if the service runs and a controller is connected
+            UpdateIdleState();
         }
 
         private void EditProfBtn_Click(object sender, RoutedEventArgs e)
